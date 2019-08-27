@@ -146,6 +146,7 @@ namespace TroublemakerProxy
                     var pluginObj = (ITroublemakerPlugin) Activator.CreateInstance(pluginType);
                     if (pluginObj is TroublemakerPluginBase libraryClass) {
                         libraryClass.Log = _logger.ForContext("SourceContext", pluginObj.GetType().Name);
+                        libraryClass.Log.Information("Initializing...");
                     }
 
                     if (plugin.ConfigPath != null) {
@@ -299,7 +300,7 @@ namespace TroublemakerProxy
                     "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] ({SourceContext:l}) {Message:lj}{NewLine}{Exception}")
                 .MinimumLevel.Verbose()
                 .CreateLogger().ForContext("SourceContext", "TroublemakerProxy");
-            _logger.Information("Logging started!");
+            _logger.Information("Logging started ({0})!", Path.Combine(Path.GetTempPath(), "Logs", "troublemaker-log.txt"));
         }
 
         #endregion

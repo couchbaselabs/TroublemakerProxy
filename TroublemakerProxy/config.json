@@ -1,0 +1,10 @@
+{
+  "FromPort": 5984,
+  "ToPort": 4984,
+  "Plugins": [
+    {
+      "Path": "C:\\Development\\TroublemakerProxy\\BadNetworkPlugin\\bin\\Debug\\netstandard2.0\\BadNetworkPlugin.dll",
+      "ConfigPath": "C:\\Development\\TroublemakerProxy\\BadNetworkPlugin\\config.json"
+    }
+  ]
+}

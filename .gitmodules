@@ -1,0 +1,3 @@
+[submodule "cblip"]
+	path = cblip
+	url = https://github.com/couchbaselabs/CBlip

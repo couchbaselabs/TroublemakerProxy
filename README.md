@@ -1,5 +1,5 @@
 # TroublemakerProxy
-A program that sits between Couchbase Lite and Sync Gateway to cause intentional problems for testing.  Its functionality is driven by plugins.
+A program that sits between Couchbase Lite and a sync server such as Sync Gateway to cause intentional problems for testing.  Its functionality is driven by plugins.
 
 ## Building
 

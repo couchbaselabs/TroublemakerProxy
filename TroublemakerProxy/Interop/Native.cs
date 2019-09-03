@@ -30,17 +30,16 @@ namespace TroublemakerProxy.Interop
     internal unsafe struct blip_message_t
     {
         #region Variables
-
-        public byte* body;
-        public int checksum;
-        public FrameFlags flags;
-
+        
         public ulong msg_no;
-        public byte* properties;
         public MessageType type;
+        public FrameFlags flags;
+        public byte* properties;
+        public byte* body;
         private UIntPtr _body_size;
-        private fixed ulong _private[4];
+        public int checksum;
         private int calculated_checksum;
+        private fixed ulong _private[4];
 
         #endregion
 

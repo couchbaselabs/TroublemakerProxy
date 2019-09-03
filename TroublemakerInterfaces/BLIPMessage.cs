@@ -17,6 +17,7 @@
 // 
 
 using System;
+using System.Linq;
 
 namespace TroublemakerInterfaces
 {
@@ -121,6 +122,8 @@ namespace TroublemakerInterfaces
         /// entries separated by ':')
         /// </summary>
         public string Properties { get; set; }
+
+        public string Profile => Properties?.Split(':').SkipWhile(x => x != "Profile").Skip(1).FirstOrDefault();
 
         /// <summary>
         /// The type of this message

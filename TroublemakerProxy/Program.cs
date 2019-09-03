@@ -138,7 +138,7 @@ namespace TroublemakerProxy
 
             foreach (var plugin in _parsedConfig.Plugins) {
                 var loader = PluginLoader.CreateFromAssemblyFile(plugin.Path,
-                    new[] {typeof(ITroublemakerPlugin), typeof(ILogger)});
+                    new[] {typeof(ITroublemakerPlugin), typeof(ILogger), typeof(JsonSerializer)});
                 foreach (var pluginType in loader
                     .LoadDefaultAssembly()
                     .GetTypes()
@@ -270,35 +270,36 @@ namespace TroublemakerProxy
 
         private async Task ReadFromClient()
         {
-            await Read(true);
-            if (_fromClient.State == WebSocketState.Open || _fromClient.State == WebSocketState.CloseReceived) {
-                ReadFromClient();
-            } else {
-                _logger.Information("Client disconnected...");
-                ListenForConnection();
+            while (_fromClient.State == WebSocketState.Open || _fromClient.State == WebSocketState.CloseReceived) {
+                await Read(true);
             }
+
+            _logger.Information("Client disconnected...");
+            ListenForConnection();
         }
 
         private async Task ReadFromServer()
         {
-            await Read(false);
-            if (_toRemote.State == WebSocketState.Open || _toRemote.State == WebSocketState.CloseReceived) {
-                ReadFromServer();
-            } else {
-                _logger.Information("Server disconnected...");
+            while (_toRemote.State == WebSocketState.Open || _toRemote.State == WebSocketState.CloseReceived) {
+                await Read(false);
             }
+
+            _logger.Information("Server disconnected...");
         }
 
         private void SetupLogger()
         {
+            var logsDir = Path.Combine(Path.GetTempPath(), "Logs");
+            Directory.CreateDirectory(logsDir);
+
             _logger = new LoggerConfiguration()
+                .MinimumLevel.Verbose()
                 .WriteTo.Console(LogEventLevel.Information,
                     "[{Timestamp:HH:mm:ss} {Level:u3}] ({SourceContext:l}) {Message:lj}{NewLine}{Exception}")
-                .WriteTo.File(Path.Combine(Path.GetTempPath(), "Logs", "troublemaker-log.txt"),
+                .WriteTo.File(Path.Combine(logsDir, "troublemaker-log.txt"),
                     rollOnFileSizeLimit: true, fileSizeLimitBytes: 1024 * 1024, retainedFileCountLimit: 5,
                     outputTemplate:
                     "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] ({SourceContext:l}) {Message:lj}{NewLine}{Exception}")
-                .MinimumLevel.Verbose()
                 .CreateLogger().ForContext("SourceContext", "TroublemakerProxy");
             _logger.Information("Logging started ({0})!", Path.Combine(Path.GetTempPath(), "Logs", "troublemaker-log.txt"));
         }

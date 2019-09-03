@@ -1,0 +1,30 @@
+{
+  "Rules": [
+    {
+      "RuleDirection":  "ToServer", 
+      "Criteria": {
+        "ApplicationFrequency": "OnlyOnce",
+        "Type": "Request",
+        "Profile": "setCheckpoint",
+        "ApplyToReply":  true 
+      },
+      "OutputTransforms": [
+        {
+          "Portion": "Type",
+          "Type": "Error"
+        },
+        {
+          "Portion": "Properties",
+          "Properties": {
+            "Error-Domain": "HTTP",
+            "Error-Code": "409"
+          }
+        },
+        {
+          "Portion": "Body",
+          "Content":  "Document Update conflict" 
+        }
+      ]
+    }
+  ] 
+}

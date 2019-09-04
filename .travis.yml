@@ -16,10 +16,11 @@ matrix:
             zlib1g
             clang
       mono: none
-      dotnet: latest
+      dotnet: 2.1.508
     - name: macOS
       os: osx
       osx_image: xcode12
-
+      mono: none
+      dotnet: 2.1.508
 script:
   dotnet restore

@@ -25,6 +25,7 @@ build_script:
         dotnet publish -c Release /p:LinkDuringPublish=false
         Push-Location TroublemakerProxy 
         dotnet publish -r win7-x64 -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
+        Pop-Location
 
 after_build:
     - ps: Move-Item .\TroublemakerProxy\bin\release\netcoreapp2.0\win7-x64\publish\ TroublemakerProxy_Build

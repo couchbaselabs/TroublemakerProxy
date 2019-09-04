@@ -1,0 +1,25 @@
+language: csharp
+sudo: required
+
+matrix:
+  include:
+    - name: Ubuntu
+      dist: bionic
+      addons:
+        apt:
+          packages:
+            gettext
+            libcurl4-openssl-dev
+            libicu-dev
+            libssl-dev
+            libunwind8
+            zlib1g
+            clang
+      mono: none
+      dotnet: latest
+    - name: macOS
+      os: osx
+      osx_image: xcode12
+
+script:
+  dotnet restore

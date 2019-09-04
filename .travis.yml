@@ -8,7 +8,6 @@ matrix:
       mono: none
       dotnet: 2.1.508
       env:
-        - MATRIX_EVAL="CC=clang && CXX=clang++"
         - RID=linux-x64
     - name: macOS
       os: osx
@@ -16,13 +15,11 @@ matrix:
       dotnet: 2.1.508
       env:
         - RID=osx-x64
-before_install:
-  - eval "${MATRIX_EVAL}"
 script:
   - |
     mkdir -p cblip/build
     pushd cblip/build
-    cmake -DCMAKE_BUILD_TYPE=MinSizeRel ..
+    CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=MinSizeRel ..
     make -j8 CBlip
     popd
 

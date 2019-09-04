@@ -23,4 +23,13 @@ matrix:
       mono: none
       dotnet: 2.1.508
 script:
-  dotnet restore
+  - |
+    mkdir -p cblip/build
+    pushd cblip/build
+    cmake -DCMAKE_BUILD_TYPE=MinSizeRel ..
+    make -j8 CBlip
+    popd
+
+    dotnet publish -c Release /p:LinkDuringPublish=false
+    pushd TroublemakerProxy
+    dotnet publish -r win7-x64 -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true

@@ -15,7 +15,7 @@ install:
     - git submodule update --init --recursive
 
 build_script:
-    - ps |
+    - ps: |
       New-Item -Type Directory cblip/build -ErrorAction Ignore
       Push-Location cblip/build
       cmake -G "Visual Studio 15 2017 Win64" ..

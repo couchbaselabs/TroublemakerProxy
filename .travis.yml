@@ -3,13 +3,18 @@ language: csharp
 matrix:
   include:
     - name: Ubuntu
+      os: linux
       dist: bionic
       mono: none
       dotnet: 2.1.508
+      env:
+        - RID=linux-x64
     - name: macOS
       os: osx
       mono: none
       dotnet: 2.1.508
+      env:
+        - RID=osx-x64
 script:
   - |
     mkdir -p cblip/build
@@ -20,4 +25,4 @@ script:
 
     dotnet publish -c Release /p:LinkDuringPublish=false
     pushd TroublemakerProxy
-    dotnet publish -r win7-x64 -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
+    dotnet publish -r $RID -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true

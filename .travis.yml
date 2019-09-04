@@ -4,7 +4,7 @@ matrix:
   include:
     - name: Ubuntu
       os: linux
-      dist: bionic
+      dist: xenial
       mono: none
       dotnet: 2.1.508
       env:
@@ -19,7 +19,7 @@ script:
   - |
     mkdir -p cblip/build
     pushd cblip/build
-    CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=MinSizeRel ..
+    cmake -DCMAKE_BUILD_TYPE=MinSizeRel ..
     make -j8 CBlip
     popd
 

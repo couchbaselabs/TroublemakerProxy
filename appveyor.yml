@@ -1,0 +1,39 @@
+version: 1.0.0.{build}
+branches:
+    only:
+        - master
+
+skip_tags: true
+init:
+    - cmd: git config --global core.autocrlf true
+
+# Environment
+image: Visual Studio 2017
+clone_depth: 1
+
+install:
+    - git submodule update --init --recursive
+
+build_script:
+    - ps |
+      New-Item -Type Directory cblip/build -ErrorAction Ignore
+      Push-Location cblip/build
+      cmake -G "Visual Studio 15 2017 Win64" ..
+      cmake --build . --target CBlip --config MinSizeRel
+      Pop-Location
+
+      dotnet publish -c Release /p:LinkDuringPublish=false
+      Push-Location TroublemakerProxy 
+      dotnet publish -r win7-x64 -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
+
+after_build:
+    - ps: Move-Item .\TroublemakerProxy\bin\release\netcoreapp2.0\win7-x64\publish\ TroublemakerProxy_Build
+    - ps: Move-Item .\BadNetworkPlugin\bin\release\netstandard2.0\publish\ BadNetwork_Plugin
+    - ps: Move-Item .\MessageInterceptorPlugin\bin\release\netstandard2.0\publish\ MessageInterceptor_Plugin
+    - ps: Move-Item .\NoCompressionPlugin\bin\release\netstandard2.0\publish\ NoCompression_Plugin
+
+artifacts:
+    - path: TroublemakerProxy_Build
+    - path: BadNetwork_Plugin
+    - path: MessageInterceptor_Plugin
+    - path: NoCompression_Plugin

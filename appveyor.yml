@@ -16,15 +16,15 @@ install:
 
 build_script:
     - ps: |
-      New-Item -Type Directory cblip/build -ErrorAction Ignore
-      Push-Location cblip/build
-      cmake -G "Visual Studio 15 2017 Win64" ..
-      cmake --build . --target CBlip --config MinSizeRel
-      Pop-Location
+        New-Item -Type Directory cblip/build -ErrorAction Ignore
+        Push-Location cblip/build
+        cmake -G "Visual Studio 15 2017 Win64" ..
+        cmake --build . --target CBlip --config MinSizeRel
+        Pop-Location
 
-      dotnet publish -c Release /p:LinkDuringPublish=false
-      Push-Location TroublemakerProxy 
-      dotnet publish -r win7-x64 -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
+        dotnet publish -c Release /p:LinkDuringPublish=false
+        Push-Location TroublemakerProxy 
+        dotnet publish -r win7-x64 -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
 
 after_build:
     - ps: Move-Item .\TroublemakerProxy\bin\release\netcoreapp2.0\win7-x64\publish\ TroublemakerProxy_Build

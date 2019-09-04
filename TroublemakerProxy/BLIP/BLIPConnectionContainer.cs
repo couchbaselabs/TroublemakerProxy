@@ -28,17 +28,39 @@ namespace TroublemakerProxy.BLIP
 {
     internal sealed unsafe class BLIPConnectionContainer : NativeContainer
     {
+        #region Variables
+
         private MemoryStream _buffer = new MemoryStream();
+
+        #endregion
+
+        #region Properties
+
+        public string Name { get; }
+
+        #endregion
 
         #region Constructors
 
-        public BLIPConnectionContainer(blip_connection_t* nativeHandle) : base((IntPtr) nativeHandle)
+        public BLIPConnectionContainer(string name) 
+            : this(Native.blip_connection_new(), name)
         {
+
+        }
+
+        public BLIPConnectionContainer(blip_connection_t* nativeHandle, string name) : base((IntPtr) nativeHandle)
+        {
+            Name = name;
         }
 
         #endregion
 
         #region Public Methods
+
+        public static implicit operator blip_connection_t*(BLIPConnectionContainer container)
+        {
+            return (blip_connection_t*) container.NativeHandle.ToPointer();
+        }
 
         public BLIPMessageContainer ReadMessage(Stream payload)
         {
@@ -47,7 +69,7 @@ namespace TroublemakerProxy.BLIP
             var bytes = _buffer.ToArray();
             BLIPMessageContainer container;
             fixed (byte* b = bytes) {
-                var nativeMessage = Native.blip_message_new(this, b, (UIntPtr) bytes.Length);
+                var nativeMessage = Native.blip_message_read(this, b, (UIntPtr) bytes.Length);
                 container = new BLIPMessageContainer(nativeMessage);
             }
 
@@ -60,29 +82,29 @@ namespace TroublemakerProxy.BLIP
         {
             container.ApplyMessage(message);
             UIntPtr size;
-            byte* bytes = Native.blip_message_serialize(container, &size);
+            byte* bytes = Native.blip_message_serialize(this, container, &size);
             var retVal = new byte[size.ToUInt32()];
             Marshal.Copy((IntPtr) bytes, retVal, 0, (int) size.ToUInt32());
             return retVal;
-        }
-
-        public static implicit operator blip_connection_t*(BLIPConnectionContainer container)
-        {
-            return (blip_connection_t*) container.NativeHandle.ToPointer();
         }
 
         #endregion
 
         #region Overrides
 
+        protected override void FreeHandle(IntPtr nativeHandle)
+        {
+            Native.blip_connection_free((blip_connection_t*) nativeHandle);
+        }
+
         protected override void FreeManaged()
         {
             _buffer.Dispose();
         }
 
-        protected override void FreeHandle(IntPtr nativeHandle)
+        public override string ToString()
         {
-            Native.blip_connection_free((blip_connection_t *)nativeHandle);
+            return Name;
         }
 
         #endregion

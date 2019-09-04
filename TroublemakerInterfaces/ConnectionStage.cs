@@ -42,6 +42,12 @@ namespace TroublemakerInterfaces
         /// Tampers with the contents of BLIP messages
         /// </summary>
         Message = 1 << 2,
+
+        /// <summary>
+        /// Creates an entirely fabricated response without sending the
+        /// original request through to the remote
+        /// </summary>
+        Response = 1 << 3,
     }
 
     /// <summary>

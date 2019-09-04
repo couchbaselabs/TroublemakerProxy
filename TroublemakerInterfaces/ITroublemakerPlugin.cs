@@ -85,6 +85,16 @@ namespace TroublemakerInterfaces
         /// <returns>An awaitable task</returns>
         Task HandleNetworkStage(NetworkStage stage, int size);
 
+        /// <summary>
+        /// If the plugin has the <see cref="TamperStyle.Response"/> flag then this
+        /// method is used to create a false response to a message
+        /// </summary>
+        /// <param name="message">The message being sent (always REQ)</param>
+        /// <param name="fromClient">Whether or not the request is from the local side</param>
+        /// <returns>An awaitable task holding the response to be sent.  If <c>null</c> is returned, then
+        /// the interception is cancelled and the REQ is sent normally</returns>
+        Task<BLIPMessage> HandleResponseStage(BLIPMessage message, bool fromClient);
+
         #endregion
     }
 
@@ -120,6 +130,10 @@ namespace TroublemakerInterfaces
 
         /// <inheritdoc />
         public virtual Task HandleNetworkStage(NetworkStage stage, int size) => Task.CompletedTask;
+        
+        /// <inheritdoc />
+        public virtual Task<BLIPMessage> HandleResponseStage(BLIPMessage message, bool fromClient) =>
+            Task.FromResult<BLIPMessage>(null);
 
         #endregion
     }

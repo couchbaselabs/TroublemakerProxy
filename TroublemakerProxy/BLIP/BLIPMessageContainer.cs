@@ -31,6 +31,10 @@ namespace TroublemakerProxy.BLIP
 
         #region Constructors
 
+        public BLIPMessageContainer() : base((IntPtr) Native.blip_message_new())
+        {
+        }
+
         public BLIPMessageContainer(blip_message_t* messageHandle) : base((IntPtr) messageHandle)
         {
         }
@@ -41,14 +45,26 @@ namespace TroublemakerProxy.BLIP
 
         public void ApplyMessage(BLIPMessage message)
         {
-            _hasExtra = true;
             blip_message_t* msg = this;
-            IntPtr newBody = Marshal.AllocHGlobal(message.Body.Length);
-            IntPtr newProps = Marshal.StringToCoTaskMemUTF8(message.Properties);
-            Marshal.Copy(message.Body, 0, newBody, message.Body.Length);
-            msg->body_size = (ulong) message.Body.Length;
-            msg->body = (byte*) newBody.ToPointer();
-            msg->properties = (byte*) newProps.ToPointer();
+            if (message.Body != null) {
+                _hasExtra = true;
+                IntPtr newBody = Marshal.AllocHGlobal(message.Body?.Length ?? 0);
+                Marshal.Copy(message.Body, 0, newBody, message.Body.Length);
+                msg->body_size = (ulong) message.Body.Length;
+                msg->body = (byte*) newBody.ToPointer();
+            } else {
+                msg->body = null;
+                msg->body_size = 0;
+            }
+
+            if (message.Properties != null) {
+                _hasExtra = true;
+                IntPtr newProps = Marshal.StringToCoTaskMemUTF8(message.Properties);
+                msg->properties = (byte*) newProps.ToPointer();
+            } else {
+                msg->properties = null;
+            }
+
             msg->msg_no = message.MessageNumber;
             msg->flags = message.Flags;
             msg->type = message.Type;

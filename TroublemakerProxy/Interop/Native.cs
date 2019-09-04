@@ -21,6 +21,9 @@ using System.Runtime.InteropServices;
 
 using TroublemakerInterfaces;
 
+// ReSharper disable InconsistentNaming
+#pragma warning disable 649, 169
+
 namespace TroublemakerProxy.Interop
 {
     internal struct blip_connection_t
@@ -74,12 +77,17 @@ namespace TroublemakerProxy.Interop
         public static extern void blip_message_free(blip_message_t* message);
 
         [DllImport("CBlip", CallingConvention = CallingConvention.Cdecl)]
-        public static extern blip_message_t* blip_message_new(blip_connection_t* connection, byte* data,
+        public static extern blip_message_t* blip_message_new();
+
+        [DllImport("CBlip", CallingConvention = CallingConvention.Cdecl)]
+        public static extern blip_message_t* blip_message_read(blip_connection_t* connection, byte* data,
             UIntPtr size);
 
         [DllImport("CBlip", CallingConvention = CallingConvention.Cdecl)]
-        public static extern byte* blip_message_serialize(blip_message_t* message, UIntPtr* out_size);
+        public static extern byte* blip_message_serialize(blip_connection_t* connection, blip_message_t* message, UIntPtr* out_size);
 
         #endregion
     }
 }
+
+#pragma warning restore 649, 169

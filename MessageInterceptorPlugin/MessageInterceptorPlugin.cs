@@ -16,6 +16,7 @@
 // limitations under the License.
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using TroublemakerInterfaces;
@@ -24,18 +25,9 @@ namespace MessageInterceptorPlugin
 {
     public sealed class MessageInterceptorPlugin : TroublemakerPluginBase<Configuration>
     {
-        private Dictionary<Awaiting, IReadOnlyList<IOutputTransform>> _awaitingReplies =
-            new Dictionary<Awaiting, IReadOnlyList<IOutputTransform>>();
-
-        private struct Awaiting
-        {
-            public ulong Number;
-            public bool FromClient;
-        }
-
         #region Properties
 
-        public override TamperStyle Style => TamperStyle.Message;
+        public override TamperStyle Style => TamperStyle.Response;
 
         #endregion
 
@@ -50,86 +42,43 @@ namespace MessageInterceptorPlugin
             return direction.HasFlag(Rule.Direction.ToClient);
         }
 
-        private bool HandleAwaitingOut(ref BLIPMessage message, bool fromClient)
-        {
-            if (message.Type != MessageType.Response && message.Type != MessageType.Error) {
-                return false;
-            }
-
-            var awaiting = new Awaiting
-            {
-                FromClient = fromClient,
-                Number = message.MessageNumber
-            };
-
-            if (_awaitingReplies.ContainsKey(awaiting)) {
-                var transforms = _awaitingReplies[awaiting];
-                foreach (var transform in transforms) {
-                    Log.Verbose("Applying rule for message {0} ({1})", 
-                        fromClient ? "from client" : "from server",
-                        transform);
-                    transform.Transform(ref message);
-                }
-
-                _awaitingReplies.Remove(awaiting);
-                return true;
-            }
-
-            return false;
-        }
-
-        private void HandleAwaitingIn(BLIPMessage message, bool fromClient, Rule rule)
-        {
-            var awaiting = new Awaiting
-            {
-                FromClient = !fromClient,
-                Number = message.MessageNumber
-            };
-
-            _awaitingReplies[awaiting] = rule.OutputTransforms;
-        }
-
         #endregion
 
         #region Overrides
 
-        public override Task HandleMessageStage(ref BLIPMessage message, bool fromClient)
+        public override Task<BLIPMessage> HandleResponseStage(BLIPMessage message, bool fromClient)
         {
+            var response = new BLIPMessage
+            {
+                Type = MessageType.Response,
+                MessageNumber = message.MessageNumber
+            };
             var usedRules = new List<Rule>();
             foreach (var rule in ParsedConfig.Rules) {
-                if (HandleAwaitingOut(ref message, fromClient)) {
-                    usedRules.Add(rule);
-                }
-
                 if (IsValidDirection(fromClient, rule.RuleDirection) && rule.Criteria.Matches(message)) {
-                    if (rule.Criteria.ApplyToReply) {
-                        HandleAwaitingIn(message, fromClient, rule);
-                        continue;
-                    }
-                    
                     foreach (var transform in rule.OutputTransforms) {
                         Log.Verbose("Applying rule for message {0} ({1})", 
                             fromClient ? "from client" : "from server",
                             transform);
-                        transform.Transform(ref message);
+                        transform.Transform(ref response);
                     }
 
                     usedRules.Add(rule);
                 }
             }
 
-            foreach (var usedRule in usedRules) {
-                ParsedConfig.Used(usedRule);
+            foreach (var rule in usedRules) {
+                ParsedConfig.Used(rule);
             }
 
-            return Task.CompletedTask;
+            return usedRules.Any() ? Task.FromResult(response) : Task.FromResult(default(BLIPMessage));
         }
 
         protected override bool Init()
         {
             Log.Information("Applying the following rules to messages:");
             foreach (var rule in ParsedConfig.Rules) {
-                Log.Information($"\t{rule}");
+                Log.Information("\tRule: {0}", rule);
             }
 
             return true;

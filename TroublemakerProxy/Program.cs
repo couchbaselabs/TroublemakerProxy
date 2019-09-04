@@ -41,23 +41,35 @@ using TroublemakerProxy.Interop;
 
 namespace TroublemakerProxy
 {
+    public static class Misc
+    {
+        public static void SafeSwap<T>(ref T old, T @new) where T : class, IDisposable
+        {
+            if (Object.ReferenceEquals(old, @new)) {
+                return;
+            }
+
+            var oldRef = Interlocked.Exchange(ref old, @new);
+            oldRef?.Dispose();
+        }
+    }
+
     [HelpOption]
     class Program
     {
         #region Variables
 
-        [NotNull] private readonly unsafe BLIPConnectionContainer _connectionFromClient =
-            new BLIPConnectionContainer(Native.blip_connection_new());
-        [NotNull] private readonly unsafe BLIPConnectionContainer _connectionFromServer =
-            new BLIPConnectionContainer(Native.blip_connection_new());
+        
         [NotNull] private readonly HttpListener _listener = new HttpListener();
         [NotNull] private readonly List<ITroublemakerPlugin> _plugins = new List<ITroublemakerPlugin>();
         [NotNull] private readonly byte[] _readWriteBuffer = new byte[32 * 1024];
-        [NotNull] private readonly ClientWebSocket _toRemote = new ClientWebSocket();
         [NotNull] private MemoryStream _currentClientMessage = new MemoryStream();
         [NotNull] private MemoryStream _currentServerMessage = new MemoryStream();
 
+        private BLIPConnectionContainer _connectionFromClient;
+        private BLIPConnectionContainer _connectionFromServer;
         private WebSocket _fromClient;
+        private ClientWebSocket _toRemote;
         private ILogger _logger;
         private Configuration _parsedConfig;
 
@@ -81,22 +93,50 @@ namespace TroublemakerProxy
 
         #region Private Methods
 
-        private async Task<byte[]> ApplyMessagePlugins(BLIPConnectionContainer connection, MemoryStream currentMessage,
+        private async Task<(byte[] serialized, bool intercepted)> ApplyTransformPlugins(MemoryStream currentMessage,
             bool fromClient)
         {
-            if (!_plugins.Any(x => x.Style.HasFlag(TamperStyle.Message))) {
-                return currentMessage.ToArray();
+            if (!_plugins.Any(x => x.Style.HasFlag(TamperStyle.Message) || x.Style.HasFlag(TamperStyle.Response))) {
+                return (currentMessage.ToArray(), false);
             }
 
+            var connection = fromClient ? _connectionFromClient : _connectionFromServer;
+            var otherConnection = fromClient ? _connectionFromServer : _connectionFromClient;
+            var intercept = false;
             using (var messageContainer = connection.ReadMessage(currentMessage)) {
                 var message = messageContainer.CreateMessage();
                 foreach (var plugin in _plugins.Where(x => x.Style.HasFlag(TamperStyle.Message))) {
-                    await plugin.HandleMessageStage(ref message, fromClient);
+                    try {
+                        await plugin.HandleMessageStage(ref message, fromClient);
+                    } catch (Exception e) {
+                        _logger.Error(e, "Plugin exception during message stage ({0})", plugin.GetType().Name);
+                        throw;
+                    }
                 }
 
-                return connection.SerializeMessage(messageContainer, message);
+                if (message.Type == MessageType.Request) {
+                    var responsePlugin = _plugins.FirstOrDefault(x => x.Style.HasFlag(TamperStyle.Response));
+                    if (responsePlugin != null) {
+                        try {
+                            var response = await responsePlugin.HandleResponseStage(message, fromClient);
+                            if (response != null) {
+                                message = response;
+                                intercept = true;
+                            }
+                        } catch (Exception e) {
+                            _logger.Error(e, "Plugin exception during response stage ({0})",
+                                responsePlugin.GetType().Name);
+                            throw;
+                        }
+                    }
+                }
+
+                var connectionToSerialize = intercept ? otherConnection : connection;
+                return (connectionToSerialize.SerializeMessage(messageContainer, message), intercept);
             }
         }
+
+
 
         private async Task CloseSocket(WebSocket socket, WebSocketCloseStatus status, string description)
         {
@@ -113,21 +153,29 @@ namespace TroublemakerProxy
             if (!nextContext.Request.IsWebSocketRequest) {
                 _logger.Warning("Ignoring non-websocket request to {0}", nextContext.Request.Url);
                 nextContext.Response.Close();
-                ListenForConnection();
+                var ignore = ListenForConnection().ContinueWith(
+                    t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
+                    TaskContinuationOptions.OnlyOnFaulted);
                 return;
             }
 
             var webSocket = await nextContext.AcceptWebSocketAsync("BLIP_3+CBMobile_2");
             _logger.Information("Established websocket connection to client...");
-            _fromClient = webSocket.WebSocket;
+            Misc.SafeSwap(ref _fromClient, webSocket.WebSocket);
             var builder = new UriBuilder(nextContext.Request.Url);
             builder.Port = _parsedConfig.ToPort;
             builder.Scheme = "ws";
+            Misc.SafeSwap(ref _toRemote, new ClientWebSocket());
             _toRemote.Options.AddSubProtocol(_fromClient.SubProtocol);
             await _toRemote.ConnectAsync(builder.Uri, CancellationToken.None);
             _logger.Information("Established websocket connection to server...");
-            ReadFromClient();
-            ReadFromServer();
+            Misc.SafeSwap(ref _connectionFromClient, new BLIPConnectionContainer( "From Client"));
+            Misc.SafeSwap(ref _connectionFromServer, new BLIPConnectionContainer( "From Server"));
+
+            var ignore2 = ReadFromClient().ContinueWith(t => _logger.Error(t.Exception.InnerException, "Exception in ReadFromClient"),
+                TaskContinuationOptions.OnlyOnFaulted);
+            ignore2 = ReadFromServer().ContinueWith(t => _logger.Error(t.Exception.InnerException, "Exception in ReadFromServer"),
+                TaskContinuationOptions.OnlyOnFaulted);
         }
 
         private void LoadPlugins()
@@ -179,6 +227,29 @@ namespace TroublemakerProxy
             }
         }
 
+        private async Task SendNoop((byte[] serialized, bool intercepted) transformResult,
+            BLIPConnectionContainer container, WebSocket connection)
+        {
+            if (!transformResult.intercepted) {
+                return;
+            }
+
+            var msgNo = VarintBitConverter.ToUInt64(transformResult.serialized);
+            var msg = new BLIPMessage
+            {
+                MessageNumber = msgNo,
+                Flags = FrameFlags.NoReply,
+                Properties = "no-op:true",
+                Type = MessageType.Request
+            };
+
+            using (var msgContainer = new BLIPMessageContainer()) {
+                var msgBytes = container.SerializeMessage(msgContainer, msg);
+                await connection.SendAsync(new ArraySegment<byte>(msgBytes), WebSocketMessageType.Binary, true,
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+
         private async Task<int> OnExecute()
         {
             Console.WriteLine("Press Ctrl+C to exit...");
@@ -194,8 +265,10 @@ namespace TroublemakerProxy
 
             _listener.Prefixes.Add($"http://*:{_parsedConfig.FromPort}/");
             _listener.Start();
-            ListenForConnection();
-            _logger.Information($"Listening on port {_parsedConfig.FromPort}...");
+            var ignore = ListenForConnection().ContinueWith(
+                t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
+                TaskContinuationOptions.OnlyOnFaulted);;
+            _logger.Information("Listening on port {0}...", _parsedConfig.FromPort);
 
 
             var waitHandle = new SemaphoreSlim(0, 1);
@@ -210,19 +283,16 @@ namespace TroublemakerProxy
             ArraySegment<byte> buffer;
             WebSocket socketFrom, socketTo;
             MemoryStream currentMessage;
-            BLIPConnectionContainer connection;
             if (client) {
                 buffer = new ArraySegment<byte>(_readWriteBuffer, 0, 16 * 1024);
                 socketFrom = _fromClient;
                 socketTo = _toRemote;
                 currentMessage = _currentClientMessage;
-                connection = _connectionFromClient;
             } else {
                 buffer = new ArraySegment<byte>(_readWriteBuffer, 16 * 1024, 16 * 1024);
                 socketFrom = _toRemote;
                 socketTo = _fromClient;
                 currentMessage = _currentServerMessage;
-                connection = _connectionFromServer;
             }
 
             if (socketFrom.State == WebSocketState.CloseReceived) {
@@ -245,20 +315,32 @@ namespace TroublemakerProxy
 
             foreach (var plugin in _plugins) {
                 if (plugin.Style.HasFlag(TamperStyle.Network)) {
-                    await plugin.HandleNetworkStage(NetworkStage.Initial, -1);
-                    await plugin.HandleNetworkStage(NetworkStage.Write, received.Count);
+                    try {
+                        await plugin.HandleNetworkStage(NetworkStage.Initial, -1);
+                        await plugin.HandleNetworkStage(NetworkStage.Write, received.Count);
+                    } catch (Exception e) {
+                        _logger.Error(e, "Plugin exception during network stage ({0})", plugin.GetType().Name);
+                        throw;
+                    }
                 }
 
                 if (plugin.Style.HasFlag(TamperStyle.Bytes)) {
-                    await plugin.HandleBytesStage(buffer, received.Count, true);
+                    try {
+                        await plugin.HandleBytesStage(buffer, received.Count, true);
+                    } catch (Exception e) {
+                        _logger.Error(e, "Plugin exception during bytes stage ({0})", plugin.GetType().Name);
+                        throw;
+                    }
                 }
             }
 
             currentMessage.Write(_readWriteBuffer, client ? 0 : 16 * 1024, received.Count);
             if (received.EndOfMessage) {
-                byte[] serialized = await ApplyMessagePlugins(connection, currentMessage, client);
-                var writeBuffer = new ArraySegment<byte>(serialized);
-                await socketTo.SendAsync(writeBuffer, WebSocketMessageType.Binary, true, CancellationToken.None);
+                var transformResult = await ApplyTransformPlugins(currentMessage, client);
+                var writeBuffer = new ArraySegment<byte>(transformResult.serialized);
+                var socketToSend = transformResult.intercepted ? socketFrom : socketTo;
+                await SendNoop(transformResult, client ? _connectionFromClient : _connectionFromServer, socketTo);
+                await socketToSend.SendAsync(writeBuffer, WebSocketMessageType.Binary, true, CancellationToken.None);
                 currentMessage.Dispose();
                 if (client) {
                     _currentClientMessage = new MemoryStream();
@@ -271,17 +353,27 @@ namespace TroublemakerProxy
         private async Task ReadFromClient()
         {
             while (_fromClient.State == WebSocketState.Open || _fromClient.State == WebSocketState.CloseReceived) {
-                await Read(true);
+                try {
+                    await Read(true);
+                } catch (Exception) {
+                    _logger.Warning("Exception during read from local, resetting...");
+                }
             }
 
             _logger.Information("Client disconnected...");
-            ListenForConnection();
+            var ignore = ListenForConnection().ContinueWith(
+                t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
+                TaskContinuationOptions.OnlyOnFaulted);;
         }
 
         private async Task ReadFromServer()
         {
             while (_toRemote.State == WebSocketState.Open || _toRemote.State == WebSocketState.CloseReceived) {
-                await Read(false);
+                try {
+                    await Read(false);
+                } catch (Exception) {
+                    _logger.Warning("Exception during read from remote, resetting...");
+                }
             }
 
             _logger.Information("Server disconnected...");

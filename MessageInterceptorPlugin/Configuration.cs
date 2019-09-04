@@ -299,7 +299,7 @@ namespace MessageInterceptorPlugin
                 sb.AppendFormat("{0}Properties contains {1}", prefix, JsonConvert.SerializeObject(Properties));
             }
 
-            sb.AppendFormat(" (Frequency = {0})", ApplicationFrequency);
+            sb.AppendFormat(" (Frequency = {0}, ApplyToReply = {1})", ApplicationFrequency, ApplyToReply);
             return sb.ToString();
         }
 
@@ -570,13 +570,15 @@ namespace MessageInterceptorPlugin
         public void Transform(ref BLIPMessage message)
         {
             var dictionary = new Dictionary<string, string>();
-            string key = default;
-            foreach (var entry in message.Properties.Split(':')) {
-                if (key == null) {
-                    key = entry;
-                } else {
-                    dictionary[key] = entry;
-                    key = null;
+            if (message.Properties != null) {
+                string key = default;
+                foreach (var entry in message.Properties.Split(':')) {
+                    if (key == null) {
+                        key = entry;
+                    } else {
+                        dictionary[key] = entry;
+                        key = null;
+                    }
                 }
             }
 

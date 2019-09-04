@@ -10,8 +10,6 @@ namespace Replication
     {
         static void Main(string[] args)
         {
-            Couchbase.Lite.Support.NetDesktop.Activate();
-            
             Console.WriteLine("Press any key to start...");
             Console.ReadKey();
             using (var db = new Database("db")) {

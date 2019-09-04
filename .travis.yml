@@ -7,7 +7,13 @@ matrix:
       dist: bionic
       mono: none
       dotnet: 2.1.508
+       apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7
       env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
         - RID=linux-x64
     - name: macOS
       os: osx
@@ -15,6 +21,8 @@ matrix:
       dotnet: 2.1.508
       env:
         - RID=osx-x64
+before_install:
+  - eval "${MATRIX_EVAL}"
 script:
   - |
     mkdir -p cblip/build
@@ -23,6 +31,5 @@ script:
     make -j8 CBlip
     popd
 
-    dotnet publish -c Release /p:LinkDuringPublish=false
     pushd TroublemakerProxy
     dotnet publish -r $RID -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true

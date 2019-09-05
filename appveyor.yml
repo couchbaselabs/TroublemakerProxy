@@ -35,6 +35,8 @@ after_build:
 
 artifacts:
     - path: TroublemakerProxy_Build
+      name: TroublemakerProxy_win7-x64
+      type: zip
     - path: BadNetwork_Plugin
     - path: MessageInterceptor_Plugin
     - path: NoCompression_Plugin

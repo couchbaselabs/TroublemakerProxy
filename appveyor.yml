@@ -4,7 +4,6 @@ branches:
         - master
         - /\d*\.\d*\.\d*/
 
-skip_tags: true
 init:
     - cmd: git config --global core.autocrlf true
 

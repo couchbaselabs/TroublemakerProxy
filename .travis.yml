@@ -29,3 +29,11 @@ script:
 
     pushd TroublemakerProxy
     dotnet publish -r $RID -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
+before_deploy: "pushd TroublemakerProxy/bin/Release/netcoreapp2.0/$RID/publish && zip TroublemakerProxy_$RID.zip *"
+deploy:
+  provider: releases
+  api_key:
+    secure: Wtq8aaa1rU515q7fdms4HCPhtBBhhlBtmtjd8bJia2/QOq03s2apvbxQdCPCQEl7vnV1KqlXorPPFVtAVvrlB6UCn+2NYuKTaetzyhIZcQhlGCFsdJow41HOW9BzEieq23SbCDk8mlx12wytEoPxxntMv2Qq8BnmI/hP+ci/rMusnlxrDS2Jg3zobZp859KjEDCA2P6cvHLZ4N9bgFcuyfoCNhh4av48YKlOWLIp8vgHM8rjKfTEMCxKdwStbKHwFVIcILeadiuBGEmA2fAxV/LavZg3ibHXfPpK0sCq8YJ6bYd659USBDNXUg3xkplPpY4Gzy2Mg4RTzHMM+6rxEtJ1GDFRHBFJ34sTbXcdtPjbgMVJDjI5NFJ7bMu4T4Y8PHKKuiH8uyUhK9/S4smHjqwmX+Cyue3zmdFLYktVJgxm+uJ8McGibyX8goX0Jq9V88Y65EgteeEkJNWSntX336nIEG2Ap7kzGA2226Ke7dsTahL7o8UnkqDxGyMxzkasJ10B8gsogos3Wsi56IINq5gJrR8PgbJ9W9P9O9wiwjouLiVBHBa1yNyHrBvKdr+0HaFqYA0zR646zCIVRfJmz2L4SsCwwQOdBjWqZL7dNecNvlr9JLdPtyAdsd1P5mbG4yny9QeuizUAuRPHzbw5HoZCZQoH3Ho/1N3FI0STPno=
+  file: TroublemakerProxy/bin/Release/netcoreapp2.0/$RID/publish/Troublemaker_$RID.zip
+  skip_cleanup: true
+  draft: true

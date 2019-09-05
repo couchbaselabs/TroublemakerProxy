@@ -29,7 +29,7 @@ script:
 
     pushd TroublemakerProxy
     dotnet publish -r $RID -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
-before_deploy: "pushd TroublemakerProxy/bin/Release/netcoreapp2.0/$RID/publish && zip TroublemakerProxy_$RID.zip *"
+before_deploy: "pushd bin/Release/netcoreapp2.0/$RID/publish && zip TroublemakerProxy_$RID.zip *"
 deploy:
   provider: releases
   api_key:

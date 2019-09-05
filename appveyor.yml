@@ -38,3 +38,14 @@ artifacts:
     - path: BadNetwork_Plugin
     - path: MessageInterceptor_Plugin
     - path: NoCompression_Plugin
+
+deploy:
+    provider: GitHub
+    release: $(APPVEYOR_REPO_TAG_NAME)
+    description: "Release $(APPVEYOR_REPO_TAG_NAME) of TroublemakerProxy"
+    artifact: TroublemakerProxy_Build, BadNetwork_Plugin, MessageInterceptor_Plugin, NoCompression_Plugin
+    force_update: true
+    auth_token:
+        secure: UTRy2ve/9X5iHLIHzvzfwhpprTuhk7tKoete6RfENcFEtSPM1MTP/pCTLZmuYqUT
+    on:
+        APPVEYOR_REPO_TAG: true

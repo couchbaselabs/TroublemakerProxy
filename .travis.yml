@@ -7,6 +7,10 @@ matrix:
       dist: xenial
       mono: none
       dotnet: 2.1.508
+      addons:
+        apt:
+          packages:
+            - libunwind8
       env:
         - RID=linux-x64
     - name: macOS

@@ -221,8 +221,6 @@ namespace MessageInterceptorPlugin
 
         public Frequency ApplicationFrequency { get; set; } = Frequency.Always;
 
-        public bool ApplyToReply { get; set; }
-
         [JsonConverter(typeof(StringEnumConverter))]
         public FrameFlags? Flags { get; set; }
 
@@ -299,7 +297,7 @@ namespace MessageInterceptorPlugin
                 sb.AppendFormat("{0}Properties contains {1}", prefix, JsonConvert.SerializeObject(Properties));
             }
 
-            sb.AppendFormat(" (Frequency = {0}, ApplyToReply = {1})", ApplicationFrequency, ApplyToReply);
+            sb.AppendFormat(" (Frequency = {0})", ApplicationFrequency);
             return sb.ToString();
         }
 

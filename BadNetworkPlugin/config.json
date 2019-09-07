@@ -1,8 +1,0 @@
-{
-  "ReadBandwidth": {
-    "DistributionParameters": [ 500.0, 100.0 ]
-  },
-  "WriteBandwidth": {
-    "DistributionParameters": [ 500.0, 100.0 ]
-  } 
-}

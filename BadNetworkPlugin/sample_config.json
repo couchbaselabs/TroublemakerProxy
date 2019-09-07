@@ -1,0 +1,17 @@
+{
+  "ReadBandwidth": {
+    "Distribution": "",
+    "RandomSourceType":  "", 
+    "DistributionParameters": []
+  },
+  "WriteBandwidth": {
+    "Distribution": "", 
+    "RandomSourceType":  "", 
+    "DistributionParameters": []
+  },
+  "Latency": {
+    "Distribution": "",
+    "RandomSourceType": "",
+    "DistributionParameters": []
+  } 
+}

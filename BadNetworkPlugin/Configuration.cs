@@ -47,7 +47,6 @@ namespace BadNetworkPlugin
         ContinuousUniform,
         Normal,
         LogNormal,
-        Beta,
         Cauchy,
         Chi,
         ChiSquared,
@@ -64,13 +63,11 @@ namespace BadNetworkPlugin
         Weibull,
         Triangular,
         DiscreteUniform,
-        Bernoulli,
         Binomial,
         NegativeBinomial,
         Geometric,
         Hypergeometric,
         Poisson,
-        Categorical,
         ConwayMaxwellPoisson,
         Zipf
     }

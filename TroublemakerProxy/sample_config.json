@@ -1,0 +1,10 @@
+{
+  "FromPort": 0,
+  "ToPort": 0,
+  "Plugins": [
+    {
+      "Path": "Path/To/Dll",
+      "ConfigPath": "Path/To/Optional/Config"
+    }
+  ]
+}

@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "TroublemakerProxy": {
-      "commandName": "Project",
-      "commandLineArgs": "--config C:\\Development\\TroublemakerProxy\\TroublemakerProxy\\config.json"
-    }
-  }
-}

@@ -1,0 +1,48 @@
+{
+  "Rules": [
+    {
+      "RuleDirection":  "", 
+      "Criteria": {
+        "ApplicationFrequency": "",
+        "Type": "",
+        "Profile": "",
+        "Flags": "",
+        "Number": 0,
+        "Properties": {
+          "key": ""
+        }
+      },
+      "OutputTransforms": [
+        {
+          "Portion": "Type",
+          "Type": ""
+        },
+        {
+          "Portion": "Properties",
+          "Properties": {
+            "key": ""
+          },
+          "Op": "" 
+        },
+        {
+          "Portion": "Body",
+          "Content": ""
+        },
+        {
+          "Portion": "MessageNumber",
+          "Op": "",
+          "Number": 0
+        },
+        {
+          "Portion": "Flags",
+          "Op": "",
+          "Flags": ""
+        },
+        {
+          "Portion": "Profile",
+          "Profile": ""
+        }
+      ]
+    }
+  ] 
+}

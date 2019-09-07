@@ -392,6 +392,7 @@ namespace MessageInterceptorPlugin
     {
         #region Properties
 
+        [JsonConverter(typeof(StringEnumConverter))]
         [JsonProperty(Required = Required.Always)]
         public FrameFlags Flags { get; }
 

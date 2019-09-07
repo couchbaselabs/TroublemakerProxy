@@ -9,4 +9,10 @@
     <ProjectReference Include="..\TroublemakerInterfaces\TroublemakerInterfaces.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="sample_config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

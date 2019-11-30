@@ -71,4 +71,26 @@ namespace TroublemakerInterfaces
         /// </summary>
         Write
     }
+
+    /// <summary>
+    /// Used to indicate an action at the network stage of troublemaking that is
+    /// not accessible from the plugin level
+    /// </summary>
+    public enum NetworkAction
+    {
+        /// <summary>
+        /// Default, continue transmitting
+        /// </summary>
+        Continue,
+
+        /// <summary>
+        /// Send a web socket close message to close the connection
+        /// </summary>
+        CloseWebSocket,
+
+        /// <summary>
+        /// Forcibly close the TCP stream
+        /// </summary>
+        BreakPipe
+    }
 }

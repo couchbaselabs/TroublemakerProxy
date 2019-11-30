@@ -82,8 +82,8 @@ namespace TroublemakerInterfaces
         /// </summary>
         /// <param name="stage">The stage of network that is currently being tampered with</param>
         /// <param name="size">The number of bytes being sent (-1 in the case of <see cref="NetworkStage.Initial"/>)</param>
-        /// <returns>An awaitable task</returns>
-        Task HandleNetworkStage(NetworkStage stage, int size);
+        /// <returns>An awaitable task that returns an action to take regarding the network</returns>
+        Task<NetworkAction> HandleNetworkStage(NetworkStage stage, int size);
 
         /// <summary>
         /// If the plugin has the <see cref="TamperStyle.Response"/> flag then this
@@ -129,7 +129,7 @@ namespace TroublemakerInterfaces
         public virtual Task HandleMessageStage(ref BLIPMessage message, bool fromClient) => Task.CompletedTask;
 
         /// <inheritdoc />
-        public virtual Task HandleNetworkStage(NetworkStage stage, int size) => Task.CompletedTask;
+        public virtual Task<NetworkAction> HandleNetworkStage(NetworkStage stage, int size) => Task.FromResult(NetworkAction.Continue);
         
         /// <inheritdoc />
         public virtual Task<BLIPMessage> HandleResponseStage(BLIPMessage message, bool fromClient) =>

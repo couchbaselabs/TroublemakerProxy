@@ -300,8 +300,15 @@ namespace TroublemakerProxy
             foreach (var plugin in _plugins) {
                 if (plugin.Style.HasFlag(TamperStyle.Network)) {
                     try {
-                        await plugin.HandleNetworkStage(NetworkStage.Initial, -1);
-                        await plugin.HandleNetworkStage(NetworkStage.Write, received.Count);
+                        var action = await plugin.HandleNetworkStage(NetworkStage.Initial, -1);
+                        if (HandleNetworkAction(action)) {
+                            return;
+                        }
+
+                        action = await plugin.HandleNetworkStage(NetworkStage.Write, received.Count);
+                        if (HandleNetworkAction(action)) {
+                            return;
+                        }
                     } catch (Exception e) {
                         _logger.Error(e, "Plugin exception during network stage ({0})", plugin.GetType().Name);
                         throw;
@@ -332,6 +339,23 @@ namespace TroublemakerProxy
                     _currentServerMessage = new MemoryStream();
                 }
             }
+        }
+
+        private bool HandleNetworkAction(NetworkAction action)
+        {
+            switch (action) {
+                case NetworkAction.Continue:
+                    return false;
+                case NetworkAction.BreakPipe:
+                    _fromClient.Abort();
+                    _toRemote.Abort();
+                    break;
+                case NetworkAction.CloseWebSocket:
+                    CloseSocket(_fromClient, WebSocketCloseStatus.ProtocolError, "The server is on fire!");
+                    break;       
+            }
+
+            return true;
         }
 
         private async Task ReadFromClient()

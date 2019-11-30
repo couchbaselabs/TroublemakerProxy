@@ -89,7 +89,7 @@ namespace BadNetworkPlugin
         #region Overrides
 
         /// <inheritdoc />
-        public override async Task HandleNetworkStage(NetworkStage stage, int size)
+        public override async Task<NetworkAction> HandleNetworkStage(NetworkStage stage, int size)
         {
             switch (stage) {
                 case NetworkStage.Initial:
@@ -102,6 +102,8 @@ namespace BadNetworkPlugin
                     await Delay(_writeDistribution, size).ConfigureAwait(false);
                     break;
             }
+
+            return NetworkAction.Continue;
         }
 
         /// <inheritdoc />

@@ -32,7 +32,7 @@ after_build:
     - ps: Move-Item .\BadNetworkPlugin\bin\release\netstandard2.0\publish\ BadNetwork_Plugin
     - ps: Move-Item .\MessageInterceptorPlugin\bin\release\netstandard2.0\publish\ MessageInterceptor_Plugin
     - ps: Move-Item .\NoCompressionPlugin\bin\release\netstandard2.0\publish\ NoCompression_Plugin
-    - ps: Move-Item .\DisconnectPlugin\bin\release\netstandard2.0\publish Disconnect_Plugin
+    - ps: Move-Item .\DisconnectionPlugin\bin\release\netstandard2.0\publish Disconnection_Plugin
 
 artifacts:
     - path: TroublemakerProxy_Build
@@ -47,8 +47,8 @@ artifacts:
     - path: NoCompression_Plugin
       name: NoCompression_Plugin
       type: zip
-    - path: Disconnect_Plugin
-      name: Disconnect_Plugin
+    - path: Disconnection_Plugin
+      name: Disconnection_Plugin
       type: zip
 
 deploy:

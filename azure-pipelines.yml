@@ -14,77 +14,20 @@ strategy:
 pool:
   vmImage: $(imageName)
 steps:
-  - task: PowerShell@2
+  - task: CMake@1
     inputs:
-        targetType: 'inline'
-        script: |
-        New-Item -Type Directory cblip/build -ErrorAction Ignore
-        Push-Location cblip/build
-        cmake -G "Visual Studio 15 2017 Win64" ..
-        cmake --build . --target CBlip --config MinSizeRel
-        Pop-Location
-
-        dotnet publish -c Release /p:LinkDuringPublish=false
-        Push-Location TroublemakerProxy 
-        dotnet publish -r win7-x64 -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
-        Pop-Location
-    
+      workingDirectory: 'cblip/build'
+      cmakeArgs: '-G "Visual Studio 15 2017 Win64" ..'
     condition: eq($(imageName), 'vs2017-win2016')
-
-    - task: Bash@3
-      inputs:
-        targetType: 'inline'
-        script: |
-          mkdir -p cblip/build
-          pushd cblip/build
-          cmake -DCMAKE_BUILD_TYPE=MinSizeRel ..
-          make -j8 CBlip
-          popd
-          
-          pushd TroublemakerProxy
-          dotnet publish -r $(RID) -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true
-      condition: ne($(imageName), 'vs2017-win2016')
-
-    - task: ArchiveFiles@2
-      inputs:
-        rootFolderOrFile: 'TroublemakerProxy/bin/Release/netcoreapp2.0/$RID/publish'
-        includeRootFolder: true
-        archiveType: 'zip'
-        archiveFile: 'TroublemakerProxy_$RID.zip'
-        replaceExistingArchive: true
     
-    - task: ArchiveFiles@2
-      inputs:
-        rootFolderOrFile: 'BadNetworkPlugin/bin/Release/netcoreapp2.0/publish'
-        includeRootFolder: true
-        archiveType: 'zip'
-        archiveFile: 'BadNetwork_Plugin.zip'
-        replaceExistingArchive: true
-      condition: eq($(imageName), 'vs2017-win2016')
-
-      - task: ArchiveFiles@2
-        inputs:
-          rootFolderOrFile: 'MessageInterceptorPlugin/bin/Release/netcoreapp2.0/publish'
-          includeRootFolder: true
-          archiveType: 'zip'
-          archiveFile: 'MessageInterceptor_Plugin.zip'
-          replaceExistingArchive: true
-        condition: eq($(imageName), 'vs2017-win2016')
-
-        - task: ArchiveFiles@2
-          inputs:
-            rootFolderOrFile: 'NoCompressionPlugin/bin/Release/netcoreapp2.0/publish'
-            includeRootFolder: true
-            archiveType: 'zip'
-            archiveFile: 'NoCompression_Plugin.zip'
-            replaceExistingArchive: true
-          condition: eq($(imageName), 'vs2017-win2016')
-
-          - task: ArchiveFiles@2
-            inputs:
-              rootFolderOrFile: 'DisconnectionPlugin/bin/Release/netcoreapp2.0/publish'
-              includeRootFolder: true
-              archiveType: 'zip'
-              archiveFile: 'Disconnection_Plugin.zip'
-              replaceExistingArchive: true
-            condition: eq($(imageName), 'vs2017-win2016')
+  - task: CMake@1
+    inputs:
+      workingDirectory: 'cblip/build'
+      cmakeArgs: '-DCMAKE_BUILD_TYPE=MinSizeRel ..'
+    condition: ne($(imageName), 'vs2017-win2016')
+  - task: DotNetCoreCLI@2
+    inputs:
+      command: 'publish'
+      publishWebProjects: false
+      projects: 'TroublemakerProxy'
+      arguments: '-r $(RID) -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true'

@@ -18,13 +18,13 @@ steps:
     inputs:
       workingDirectory: 'cblip/build'
       cmakeArgs: '-G "Visual Studio 15 2017 Win64" ..'
-    condition: eq($(imageName), 'vs2017-win2016')
+    condition: eq(variables['imageName'], 'vs2017-win2016')
     
   - task: CMake@1
     inputs:
       workingDirectory: 'cblip/build'
       cmakeArgs: '-DCMAKE_BUILD_TYPE=MinSizeRel ..'
-    condition: ne($(imageName), 'vs2017-win2016')
+    condition: ne(variables['imageName'], 'vs2017-win2016')
   - task: DotNetCoreCLI@2
     inputs:
       command: 'publish'

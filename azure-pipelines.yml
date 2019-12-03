@@ -29,13 +29,13 @@ steps:
   - task: Bash@3
     inputs:
       targetType: 'inline'
-      script: 'pushd cblip/build && make -j8 cblip'
+      script: 'pushd cblip/build && make -j8 CBlip'
     condition: ne(variables['imageName'], 'vs2017-win2016')
 
   - task: CMake@1
     inputs:
       workingDirectory: 'cblip/build'
-      cmakeArgs: '--build . --target cblip --config MinSizeRel'
+      cmakeArgs: '--build . --target CBlip --config MinSizeRel'
     condition: eq(variables['imageName'], 'vs2017-win2016')
 
   - task: DotNetCoreCLI@2

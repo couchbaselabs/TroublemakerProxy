@@ -3,12 +3,15 @@ strategy:
     linux:
       imageName: "ubuntu-16.04"
       RID: "linux-x64"
+      cmakeArgs: "-DCMAKE_BUILD_TYPE=MinSizeRel .."
     mac:
       imageName: "macos-10.14"
       RID: "osx-x64"
+      cmakeArgs: "-DCMAKE_BUILD_TYPE=MinSizeRel .."
     windows:
       imageName: "vs2017-win2016"
       RID: "win7-x64"
+      cmakeArgs: '-G "Visual Studio 15 2017 Win64" .."'
   maxParallel: 3
 
 pool:
@@ -21,14 +24,20 @@ steps:
   - task: CMake@1
     inputs:
       workingDirectory: 'cblip/build'
-      cmakeArgs: '-G "Visual Studio 15 2017 Win64" ..'
-    condition: eq(variables['imageName'], 'vs2017-win2016')
+      cmakeArgs: $(cmakeArgs)
     
+  - task: Bash@3
+    inputs:
+      targetType: 'inline'
+      script: 'pushd cblip/build && make -j8 cblip'
+    condition: ne(variables['imageName'], 'vs2017-win2016')
+
   - task: CMake@1
     inputs:
       workingDirectory: 'cblip/build'
-      cmakeArgs: '-DCMAKE_BUILD_TYPE=MinSizeRel ..'
-    condition: ne(variables['imageName'], 'vs2017-win2016')
+      cmakeArgs: '--build . --target cblip --config MinSizeRel'
+    condition: eq(variables['imageName'], 'vs2017-win2016')
+
   - task: DotNetCoreCLI@2
     inputs:
       command: 'publish'

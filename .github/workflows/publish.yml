@@ -1,0 +1,73 @@
+name: GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    name: Release
+    strategy:
+      matrix:
+        kind: ['linux', 'windows', 'macos']
+        include:
+          - kind: linux
+            os: ubuntu-latest
+            rid: linux-x64
+          - kind: windows
+            os: windows-latest
+            rid: win10-x64
+          - kind: macos
+            os: macOS-latest
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1 #opt-out of telemetry being sent to Microsoft (default: false)
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Setup .NET SDK 5.0
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+
+    - name: Create Build Environment
+      # Create a build directory, as our working directory for all subsequent commands
+      working-directory: ${{github.workspace}}
+      run: cmake -E make_directory ${{github.workspace}}/cblip/build
+
+    - name: Configure CMake (Win)
+      if: runner.os == 'Windows'
+      working-directory: ${{github.workspace}}/cblip/build
+      run: cmake -A x64 ..
+
+    - name: Configure CMake
+      if: runner.os != 'Windows'
+      working-directory: ${{github.workspace}}/cblip/build
+      run: cmake -DCMAKE_BUILD_TYPE=Release ..
+
+    - name: Build CBlip
+      working-directory: ${{github.workspace}}/cblip/build
+      run: cmake --build . --config Release --target CBlip
+
+    - name: Publish TroublemakerProxy
+      working-directory: ${{github.workspace}}
+      shell: bash
+      run: |
+        tag=$(git describe --tags --abbrev=0)
+        release_name="TroublemakerProxy-$tag-${{ matrix.rid }}"
+
+        dotnet publish -r ${{ matrix.rid }} -c Release -f net5.0 -o "$release_name" --self-contained true -p:PublishSingleFile=true
+        if [ "${{ matrix.kind }}" == "windows" ]; then
+          7z a -tzip "${release_name}.zip" "./${release_name}/*"
+        else
+          tar czvf "${release_name}.tar.gz" "$release_name"
+        fi
+
+        m -r "$release_name"

@@ -1,17 +1,17 @@
 strategy:
   matrix:
     linux:
-      imageName: "ubuntu-16.04"
+      imageName: "ubuntu-latest"
       RID: "linux-x64"
       cmakeArgs: "-DCMAKE_BUILD_TYPE=MinSizeRel .."
     mac:
-      imageName: "macos-10.14"
+      imageName: "macos-latest"
       RID: "osx-x64"
       cmakeArgs: "-DCMAKE_BUILD_TYPE=MinSizeRel .."
     windows:
-      imageName: "vs2017-win2016"
-      RID: "win7-x64"
-      cmakeArgs: '-G "Visual Studio 15 2017 Win64" .."'
+      imageName: "windows-2019"
+      RID: "win10-x64"
+      cmakeArgs: '-G "Visual Studio 16 2019" -A x64 ..'
   maxParallel: 3
 
 pool:
@@ -30,17 +30,17 @@ steps:
     inputs:
       targetType: 'inline'
       script: 'pushd cblip/build && make -j8 CBlip'
-    condition: ne(variables['imageName'], 'vs2017-win2016')
+    condition: ne(variables['imageName'], 'windows-2019')
 
   - task: CMake@1
     inputs:
       workingDirectory: 'cblip/build'
       cmakeArgs: '--build . --target CBlip --config MinSizeRel'
-    condition: eq(variables['imageName'], 'vs2017-win2016')
+    condition: eq(variables['imageName'], 'windows-2019')
 
   - task: DotNetCoreCLI@2
     inputs:
       command: 'publish'
       publishWebProjects: false
       projects: 'TroublemakerProxy'
-      arguments: '-r $(RID) -c Release -f netcoreapp2.0 --self-contained true /p:ShowLinkerSizeComparison=true'
+      arguments: '-r $(RID) -c Release -f net5.0 --self-contained true /p:ShowLinkerSizeComparison=true'

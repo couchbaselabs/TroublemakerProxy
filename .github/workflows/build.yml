@@ -22,9 +22,9 @@ jobs:
         submodules: recursive
 
     - name: Setup .NET SDK 5.0
-      uses: actions/setup-dotnet@v1.7.2
+      uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 5.0
+        dotnet-version: 5.0.x
 
     - name: Create Build Environment
       # Create a build directory, as our working directory for all subsequent commands

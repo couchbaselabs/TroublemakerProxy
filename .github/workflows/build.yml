@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1 #opt-out of telemetry being sent to Microsoft (default: false)
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Setup .NET SDK 5.0
+      uses: actions/setup-dotnet@v1.7.2
+      with:
+        dotnet-version: 5.0
+
+    - name: Create Build Environment
+      # Create a build directory, as our working directory for all subsequent commands
+      working-directory: ${{github.workspace}}
+      run: cmake -E make_directory ${{github.workspace}}/cblip/build
+
+    - name: Configure CMake
+      if: runner.os == 'Windows'
+      working-directory: ${{github.workspace}}/cblip/build
+      run: cmake -A x64 ..
+
+    - name: Build CBlip
+      working-directory: ${{github.workspace}}/cblip/build
+      run: cmake --build . --config Release --target CBlip
+
+    - name: Build TroublemakerProxy
+      working-directory: ${{github.workspace}}
+      run: dotnet build -c Release

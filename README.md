@@ -9,7 +9,7 @@ Unix:
 ```sh
 mkdir -p cblip/build
 cd cblip/build
-cmake -DCMAKE_BUILD_TYPE=MinSizeRel ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j8 CBlip
 ```
 
@@ -20,7 +20,7 @@ cd cblip/build
 
 # Replace cmake with path to cmake unless you have an alias
 cmake -G "Visual Studio 15 2017 Win64" .. # Drop the Win64 for 32-bit, or change to a different VS version if desired
-cmake --build . --target CBlip --config MinSizeRel
+cmake --build . --target CBlip --config Release
 ```
 
 After that you can simply build the C# projects

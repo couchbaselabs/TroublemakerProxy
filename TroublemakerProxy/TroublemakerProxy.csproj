@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="..\cblip\build\MinSizeRel\CBlip.dll" Link="CBlip.dll" Condition="Exists('..\cblip\build\MinSizeRel\CBlip.dll')">
+    <Content Include="..\cblip\build\Release\CBlip.dll" Link="CBlip.dll" Condition="Exists('..\cblip\build\Release\CBlip.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\cblip\build\libCBlip.so" Link="libCBlip.so" Condition="Exists('..\cblip\build\libCBlip.so')">
@@ -44,7 +44,7 @@
   </ItemGroup>
 
   <Target Name="CheckNativeDeps">
-    <Error Condition=" '$(OS)' == 'Windows_NT' and !Exists('..\cblip\build\MinSizeRel\CBlip.dll') " Text="CBlip.dll not found, please build native deps first (see README.md)" />
+    <Error Condition=" '$(OS)' == 'Windows_NT' and !Exists('..\cblip\build\Release\CBlip.dll') " Text="CBlip.dll not found, please build native deps first (see README.md)" />
     <Error Condition=" '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' and !Exists('..\cblip\build\libCBlip.so') " Text="libCBlip.so not found, please build native deps first (see README.md)" />
     <Error Condition=" '$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' and !Exists('..\cblip\build\libCBlip.dylib') " Text="libCBlip.dylib not found, please build native deps first (see README.md)" />
   </Target>

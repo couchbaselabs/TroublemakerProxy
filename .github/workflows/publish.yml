@@ -105,11 +105,7 @@ jobs:
         release_name="${{ matrix.plugin }}Plugin-$tag"
 
         dotnet publish -c Release -f net5.0 -o "$release_name" ${{ matrix.plugin }}Plugin/${{ matrix.plugin }}Plugin.csproj
-        if [ "${{ matrix.kind }}" == "windows" ]; then
-          7z a -tzip "${release_name}.zip" "./${release_name}/*"
-        else
-          tar czvf "${release_name}.tar.gz" "$release_name"
-        fi
+        7z a -tzip "${release_name}.zip" "./${release_name}/*"
 
         rm -r "$release_name"
 

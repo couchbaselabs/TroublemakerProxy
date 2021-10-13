@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
 
 jobs:
-  - release-proxy:
+  release-proxy:
     name: Release Proxy
     strategy:
       matrix:
@@ -79,7 +79,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  - release-plugins:
+  release-plugins:
     name: Release Plugins
     runs-on: windows-latest
     strategy:
@@ -90,7 +90,7 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1 #opt-out of telemetry being sent to Microsoft (default: false)
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
 
-  steps:
+    steps:
     - uses: actions/checkout@v2
     - name: Setup .NET SDK 5.0
       uses: actions/setup-dotnet@v1
@@ -119,5 +119,3 @@ jobs:
         files: "${{ matrix.plugin }}*"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      

@@ -6,8 +6,8 @@ on:
       - "v*.*.*"
 
 jobs:
-  release:
-    name: Release
+  release-proxy:
+    name: Release Proxy
     strategy:
       matrix:
         kind: ['linux', 'windows', 'macos']
@@ -71,3 +71,53 @@ jobs:
         fi
 
         m -r "$release_name"
+
+    - name: Upload
+      uses: softprops/action-gh-release@v1
+      with:
+        files: "TroublemakerProxy*"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-plugins:
+    name: Release Plugins
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        plugin: ['BadNetwork', 'Disconnection', 'MessageInterceptor', "NoCompression"]
+    
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1 #opt-out of telemetry being sent to Microsoft (default: false)
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+  steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET SDK 5.0
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.x
+
+    - name: Publish ${{ matrix.plugin }}Plugin
+      working-directory: ${{github.workspace}}
+      shell: bash
+      run: |
+        tag=$(git describe --tags --abbrev=0)
+        release_name="${{ matrix.plugin }}Plugin-$tag"
+
+        dotnet publish -c Release -f net5.0 -o "$release_name" ${{ matrix.plugin }}Plugin/${{ matrix.plugin }}Plugin.csproj
+        if [ "${{ matrix.kind }}" == "windows" ]; then
+          7z a -tzip "${release_name}.zip" "./${release_name}/*"
+        else
+          tar czvf "${release_name}.tar.gz" "$release_name"
+        fi
+
+        m -r "$release_name"
+
+    - name: Upload
+      uses: softprops/action-gh-release@v1
+      with:
+        files: "${{ matrix.plugin }}*"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      

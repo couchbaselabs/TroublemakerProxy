@@ -63,6 +63,11 @@ namespace TroublemakerProxy
     {
         #region Variables
 
+        [NotNull] private static readonly HashSet<string> ValidProtocols = new HashSet<string>
+        {
+            "BLIP_3+CBMobile_3", "BLIP_3+CBMobile_2"
+        };
+
         [NotNull] private readonly HttpListener _listener = new HttpListener();
         [NotNull] private readonly List<ITroublemakerPlugin> _plugins = new List<ITroublemakerPlugin>();
         [NotNull] private readonly byte[] _readWriteBuffer = new byte[32 * 1024];
@@ -161,7 +166,19 @@ namespace TroublemakerProxy
                 return;
             }
 
-            var webSocket = await nextContext.AcceptWebSocketAsync("BLIP_3+CBMobile_2");
+            var subprotocol = nextContext.Request.Headers["Sec-WebSocket-Protocol"]
+                    .Split(',')
+                    .Where(x => ValidProtocols.Contains(x))
+                    .OrderByDescending(x => x)
+                    .FirstOrDefault();
+
+            if(subprotocol == null)
+            {
+                nextContext.Response.Close();
+                throw new InvalidOperationException($"Invalid WS protocol received {nextContext.Request.Headers["Sec-WebSocket-Protocol"]}");
+            }
+
+            var webSocket = await nextContext.AcceptWebSocketAsync(subprotocol);
             _logger.Information("Established websocket connection to client...");
             Misc.SafeSwap(ref _fromClient, webSocket.WebSocket);
             var builder = new UriBuilder(nextContext.Request.Url)

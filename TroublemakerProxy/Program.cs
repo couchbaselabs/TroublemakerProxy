@@ -189,6 +189,10 @@ namespace TroublemakerProxy
 
             Misc.SafeSwap(ref _toRemote, new ClientWebSocket());
             _toRemote.Options.AddSubProtocol(_fromClient.SubProtocol);
+            if(nextContext.Request.Headers["Authorization"] != null) {
+                _toRemote.Options.SetRequestHeader("Authorization", nextContext.Request.Headers["Authorization"]);
+            }
+
             await _toRemote.ConnectAsync(builder.Uri, CancellationToken.None);
             _logger.Information("Established websocket connection to server...");
             Misc.SafeSwap(ref _connectionFromClient, new BLIPConnectionContainer("From Client"));

@@ -22,6 +22,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -66,6 +67,13 @@ namespace TroublemakerProxy
         [NotNull] private static readonly HashSet<string> ValidProtocols = new HashSet<string>
         {
             "BLIP_3+CBMobile_3", "BLIP_3+CBMobile_2"
+        };
+
+        // Trial and error for this list since there is no API to get what headers are set
+        // automatically on ClientWebSocket
+        [NotNull] private static readonly HashSet<string> ExcludedHeaders = new HashSet<string>
+        {
+            "Sec-WebSocket-Version", "Sec-WebSocket-Key", "Connection", "Upgrade"
         };
 
         [NotNull] private readonly HttpListener _listener = new HttpListener();
@@ -166,21 +174,6 @@ namespace TroublemakerProxy
                 return;
             }
 
-            var subprotocol = nextContext.Request.Headers["Sec-WebSocket-Protocol"]
-                    .Split(',')
-                    .Where(x => ValidProtocols.Contains(x))
-                    .OrderByDescending(x => x)
-                    .FirstOrDefault();
-
-            if(subprotocol == null)
-            {
-                nextContext.Response.Close();
-                throw new InvalidOperationException($"Invalid WS protocol received {nextContext.Request.Headers["Sec-WebSocket-Protocol"]}");
-            }
-
-            var webSocket = await nextContext.AcceptWebSocketAsync(subprotocol);
-            _logger.Information("Established websocket connection to client...");
-            Misc.SafeSwap(ref _fromClient, webSocket.WebSocket);
             var builder = new UriBuilder(nextContext.Request.Url)
             {
                 Port = _parsedConfig.ToPort, 
@@ -188,13 +181,47 @@ namespace TroublemakerProxy
             };
 
             Misc.SafeSwap(ref _toRemote, new ClientWebSocket());
-            _toRemote.Options.AddSubProtocol(_fromClient.SubProtocol);
-            if(nextContext.Request.Headers["Authorization"] != null) {
-                _toRemote.Options.SetRequestHeader("Authorization", nextContext.Request.Headers["Authorization"]);
+            foreach(string header in nextContext.Request.Headers) {
+                if(!ExcludedHeaders.Contains(header)) {
+                    if(header == "Sec-WebSocket-Protocol") {
+                        foreach(var protocol in nextContext.Request.Headers[header].Split(',')) {
+                            _toRemote.Options.AddSubProtocol(protocol);
+                        }
+                    } else if(header == "Host") {
+                        _toRemote.Options.SetRequestHeader(header, nextContext.Request.Headers[header]
+                            .Replace(_parsedConfig.FromPort.ToString(), _parsedConfig.ToPort.ToString()));
+                    } else {
+                        _toRemote.Options.SetRequestHeader(header, nextContext.Request.Headers[header]);
+                    }
+                } 
             }
 
-            await _toRemote.ConnectAsync(builder.Uri, CancellationToken.None);
+            try {
+                await _toRemote.ConnectAsync(builder.Uri, CancellationToken.None);
+            } catch(WebSocketException e) {
+                if(e.WebSocketErrorCode == WebSocketError.NotAWebSocket)  {
+                    // This is a horrid dance, WebSocketException doesn't give any information
+                    // about the underlying error code.
+                    var regex = new Regex("The server returned status code '(\\d+)' when status code '101' was expected.");
+                    var match = regex.Match(e.Message);
+                    if(match.Success)
+                    {
+                        var returnCode = Int32.Parse(match.Groups[1].Value);
+                        nextContext.Response.StatusCode = returnCode;
+                        nextContext.Response.Close();
+                        return;
+                    }
+                } 
+
+                throw;
+            }
+
             _logger.Information("Established websocket connection to server...");
+            var webSocket = await nextContext.AcceptWebSocketAsync(_toRemote.SubProtocol);
+
+            _logger.Information("Established websocket connection to client...");
+            Misc.SafeSwap(ref _fromClient, webSocket.WebSocket);
+            
             Misc.SafeSwap(ref _connectionFromClient, new BLIPConnectionContainer("From Client"));
             Misc.SafeSwap(ref _connectionFromServer, new BLIPConnectionContainer("From Server"));
 

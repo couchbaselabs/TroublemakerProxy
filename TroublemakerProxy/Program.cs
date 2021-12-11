@@ -265,6 +265,16 @@ namespace TroublemakerProxy
             }
 
             SetupLogger();
+
+#pragma warning disable CS0162 // Unreachable code detected
+            if(ThisAssembly.Git.SemVer.Source == "Tag") {
+                _logger.Information($"Starting TroublemakerProxy {ThisAssembly.Git.Tag}");
+                if(ThisAssembly.Git.IsDirty) {
+                    _logger.Warning("Repository has been modified locally!");
+                } 
+            } 
+#pragma warning restore CS0162 // Unreachable code detected
+
             LoadPlugins();
 
             _listener.Prefixes.Add($"http://*:{_parsedConfig.FromPort}/");

@@ -165,6 +165,7 @@ namespace TroublemakerProxy
         private async Task ListenForConnection()
         {
             var nextContext = await _listener.GetContextAsync();
+            _logger.Verbose($"Got connection from {nextContext.Request.RemoteEndPoint.Address}");
             if (!nextContext.Request.IsWebSocketRequest) {
                 _logger.Warning("Ignoring non-websocket request to {0}", nextContext.Request.Url);
                 nextContext.Response.Close();
@@ -185,12 +186,15 @@ namespace TroublemakerProxy
                 if(!ExcludedHeaders.Contains(header)) {
                     if(header == "Sec-WebSocket-Protocol") {
                         foreach(var protocol in nextContext.Request.Headers[header].Split(',')) {
+                            _logger.Verbose($"Adding websocket subprotocol {protocol}");
                             _toRemote.Options.AddSubProtocol(protocol);
                         }
                     } else if(header == "Host") {
+                        _logger.Verbose($"Adding altered header 'Host' from origin...");
                         _toRemote.Options.SetRequestHeader(header, nextContext.Request.Headers[header]
                             .Replace(_parsedConfig.FromPort.ToString(), _parsedConfig.ToPort.ToString()));
                     } else {
+                        _logger.Verbose($"Adding header '{header}' from origin...");
                         _toRemote.Options.SetRequestHeader(header, nextContext.Request.Headers[header]);
                     }
                 } 
@@ -207,8 +211,19 @@ namespace TroublemakerProxy
                     if(match.Success)
                     {
                         var returnCode = Int32.Parse(match.Groups[1].Value);
+                        _logger.Verbose($"Got error code '{returnCode}' from destination, returning to origin...");
                         nextContext.Response.StatusCode = returnCode;
+
+                        if(returnCode == 401) {
+                            // Hope this doesn't change because there is no bleeding way to access it, even via reflection
+                            // with ClientWebSocket
+                            nextContext.Response.AddHeader("Www-Authenticate", "Basic realm=\"Couchbase Sync Gateway\"");
+                        }
+
                         nextContext.Response.Close();
+                        var ignore = ListenForConnection().ContinueWith(
+                            t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
+                            TaskContinuationOptions.OnlyOnFaulted);
                         return;
                     }
                 } 
@@ -294,11 +309,9 @@ namespace TroublemakerProxy
             SetupLogger();
 
 #pragma warning disable CS0162 // Unreachable code detected
-            if(ThisAssembly.Git.SemVer.Source == "Tag") {
-                _logger.Information($"Starting TroublemakerProxy {ThisAssembly.Git.Tag}");
-                if(ThisAssembly.Git.IsDirty) {
-                    _logger.Warning("Repository has been modified locally!");
-                } 
+            _logger.Information($"Starting TroublemakerProxy {ThisAssembly.Git.Tag}");
+            if(ThisAssembly.Git.IsDirty) {
+                _logger.Warning("Repository has been modified locally!");
             } 
 #pragma warning restore CS0162 // Unreachable code detected
 
@@ -325,31 +338,40 @@ namespace TroublemakerProxy
             ArraySegment<byte> buffer;
             WebSocket socketFrom, socketTo;
             MemoryStream currentMessage;
+            string fromName, toName;
             if (client) {
                 buffer = new ArraySegment<byte>(_readWriteBuffer, 0, 16 * 1024);
                 socketFrom = _fromClient;
                 socketTo = _toRemote;
+                fromName = "client";
+                toName = "remote";
                 currentMessage = _currentClientMessage;
             } else {
                 buffer = new ArraySegment<byte>(_readWriteBuffer, 16 * 1024, 16 * 1024);
                 socketFrom = _toRemote;
                 socketTo = _fromClient;
+                fromName = "remote";
+                toName = "client";
                 currentMessage = _currentServerMessage;
             }
 
             if (socketFrom.State == WebSocketState.CloseReceived) {
+                _logger.Verbose($"Closing {fromName} socket in response to close message...");
                 await CloseSocket(socketFrom, WebSocketCloseStatus.NormalClosure, "");
                 return;
             }
 
             WebSocketReceiveResult received = null;
             try {
+                _logger.Verbose($"Sleeping until next input from {fromName}...");
                 received = await socketFrom.ReceiveAsync(buffer, CancellationToken.None);
+                _logger.Verbose($"Received {received.Count} bytes from {fromName}...");
             } catch (OperationCanceledException) {
                 return;
             }
 
             if (received.MessageType == WebSocketMessageType.Close) {
+                _logger.Verbose($"Closing {toName} socket in response to close message...");
                 await CloseSocket(socketTo, received.CloseStatus ?? WebSocketCloseStatus.NormalClosure,
                     received.CloseStatusDescription);
                 return;
@@ -358,11 +380,13 @@ namespace TroublemakerProxy
             foreach (var plugin in _plugins) {
                 if (plugin.Style.HasFlag(TamperStyle.Network)) {
                     try {
+                        _logger.Verbose("Initial network stage...");
                         var action = await plugin.HandleNetworkStage(NetworkStage.Initial, -1);
                         if (HandleNetworkAction(action)) {
                             return;
                         }
 
+                        _logger.Verbose("Write network stage...");
                         action = await plugin.HandleNetworkStage(NetworkStage.Write, received.Count);
                         if (HandleNetworkAction(action)) {
                             return;
@@ -375,6 +399,7 @@ namespace TroublemakerProxy
 
                 if (plugin.Style.HasFlag(TamperStyle.Bytes)) {
                     try {
+                        _logger.Verbose("Byte tampering stage...");
                         await plugin.HandleBytesStage(buffer, received.Count, true);
                     } catch (Exception e) {
                         _logger.Error(e, "Plugin exception during bytes stage ({0})", plugin.GetType().Name);

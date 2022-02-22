@@ -16,28 +16,33 @@
 //  limitations under the License.
 // 
 
+#nullable enable
+
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Reflection;
-
+using JetBrains.Annotations;
 using MathNet.Numerics.Distributions;
 using MathNet.Numerics.Random;
 
 using Newtonsoft.Json;
+// ReSharper disable UnusedMember.Global
+// ReSharper disable InconsistentNaming
 
 namespace BadNetworkPlugin
 {
+    [UsedImplicitly]
     public sealed class Configuration
     {
         #region Properties
 
-        public NumericDistribution Latency { get; set; }
+        public NumericDistribution? Latency { get; [UsedImplicitly] set; }
 
-        public NumericDistribution ReadBandwidth { get; set; }
+        public NumericDistribution? ReadBandwidth { get; [UsedImplicitly] set; }
 
-        public NumericDistribution WriteBandwidth { get; set; }
+        public NumericDistribution? WriteBandwidth { get; [UsedImplicitly] set; }
 
         #endregion
     }
@@ -88,18 +93,21 @@ namespace BadNetworkPlugin
 
     public sealed class NumericDistribution
     {
-        private IDistribution _distribution;
+        private IDistribution? _distribution;
 
         #region Properties
 
         [DefaultValue(DistributionType.Normal)]
+        [UsedImplicitly]
         public DistributionType Distribution { get; set; } = DistributionType.Normal;
 
         [DefaultValue(RandomSourceType.SystemRandomSource)]
+        [UsedImplicitly]
         public RandomSourceType RandomSourceType { get; set; } = RandomSourceType.SystemRandomSource;
 
         [Required]
-        public object[] DistributionParameters { get; set; }
+        [UsedImplicitly]
+        public object[]? DistributionParameters { get; set; }
 
         public IDistribution CreateDistribution()
         {
@@ -107,16 +115,14 @@ namespace BadNetworkPlugin
                 return _distribution;
             }
 
-            var randomSourceType = Type.GetType($"MathNet.Numerics.Random.{RandomSourceType},MathNet.Numerics");
+            var randomSourceType = Type.GetType($"MathNet.Numerics.Random.{RandomSourceType},MathNet.Numerics") ?? throw new ApplicationException($"Unable to load MathNet.Numerics.Random.{RandomSourceType}");
             var randomSource = Activator.CreateInstance(randomSourceType) as RandomSource;
             
-            var distributionType = Type.GetType($"MathNet.Numerics.Distributions.{Distribution},MathNet.Numerics");
-            foreach (var c in distributionType.GetConstructors()) {
-                if (ConstructorMatches(c)) {
-                    _distribution = Activator.CreateInstance(distributionType, DistributionParameters) as IDistribution;
-                    _distribution.RandomSource = randomSource;
-                    return _distribution;
-                }
+            var distributionType = Type.GetType($"MathNet.Numerics.Distributions.{Distribution},MathNet.Numerics") ?? throw new ApplicationException($"Unable to load MathNet.Numerics.Distributions.{Distribution}");
+            if (distributionType.GetConstructors().Any(ConstructorMatches)) {
+                _distribution = Activator.CreateInstance(distributionType, DistributionParameters) as IDistribution ?? throw new ApplicationException($"Unable to instantiate {distributionType.FullName}");
+                _distribution.RandomSource = randomSource;
+                return _distribution;
             }
 
             var passedParameters = JsonConvert.SerializeObject(DistributionParameters);
@@ -126,11 +132,11 @@ namespace BadNetworkPlugin
         private bool ConstructorMatches(ConstructorInfo info)
         {
             var parameters = info.GetParameters();
-            if (parameters.Length != DistributionParameters.Length) {
+            if (parameters.Length != DistributionParameters?.Length) {
                 return false;
             }
 
-            for (int i = 0; i < parameters.Length; i++) {
+            for (var i = 0; i < parameters.Length; i++) {
                 var cType = parameters[i].ParameterType;
                 var providedType = DistributionParameters[i].GetType();
                 if (!cType.IsAssignableFrom(providedType)) {

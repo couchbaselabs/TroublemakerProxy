@@ -16,6 +16,8 @@
 // limitations under the License.
 // 
 
+#nullable enable
+
 using System;
 using System.Linq;
 
@@ -99,11 +101,12 @@ namespace TroublemakerInterfaces
         /// <summary>
         /// The message body of the BLIP message
         /// </summary>
-        public byte[] Body { get; set; }
+        public byte[]? Body { get; set; }
 
         /// <summary>
         /// The CRC32 checksum at the end of the BLIP message
         /// </summary>
+        // ReSharper disable once UnusedAutoPropertyAccessor.Global
         public int Checksum { get; set; }
 
         /// <summary>
@@ -121,9 +124,9 @@ namespace TroublemakerInterfaces
         /// The properties of this message (string of key-value
         /// entries separated by ':')
         /// </summary>
-        public string Properties { get; set; }
+        public string? Properties { get; set; }
 
-        public string Profile => Properties?.Split(':').SkipWhile(x => x != "Profile").Skip(1).FirstOrDefault();
+        public string? Profile => Properties?.Split(':').SkipWhile(x => x != "Profile").Skip(1).FirstOrDefault();
 
         /// <summary>
         /// The type of this message

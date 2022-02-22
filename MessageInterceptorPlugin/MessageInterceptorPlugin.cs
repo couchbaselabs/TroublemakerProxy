@@ -18,11 +18,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
+using JetBrains.Annotations;
+using Serilog;
 using TroublemakerInterfaces;
 
 namespace MessageInterceptorPlugin
 {
+    [UsedImplicitly]
     public sealed class MessageInterceptorPlugin : TroublemakerPluginBase<Configuration>
     {
         #region Properties
@@ -31,16 +33,18 @@ namespace MessageInterceptorPlugin
 
         #endregion
 
+        #region Constructors
+
+        public MessageInterceptorPlugin(ILogger log) : base(log)
+        {
+        }
+
+        #endregion
+
         #region Private Methods
 
-        private bool IsValidDirection(bool fromClient, Rule.Direction direction)
-        {
-            if (fromClient) {
-                return direction.HasFlag(Rule.Direction.ToServer);
-            }
-
-            return direction.HasFlag(Rule.Direction.ToClient);
-        }
+        private static bool IsValidDirection(bool fromClient, Rule.Direction direction) 
+            => direction.HasFlag(fromClient ? Rule.Direction.ToServer : Rule.Direction.ToClient);
 
         #endregion
 
@@ -54,17 +58,19 @@ namespace MessageInterceptorPlugin
                 MessageNumber = message.MessageNumber
             };
             var usedRules = new List<Rule>();
-            foreach (var rule in ParsedConfig.Rules) {
-                if (IsValidDirection(fromClient, rule.RuleDirection) && rule.Criteria.Matches(message)) {
-                    foreach (var transform in rule.OutputTransforms) {
-                        Log.Verbose("Applying rule for message {0} ({1})", 
-                            fromClient ? "from client" : "from server",
-                            transform);
-                        transform.Transform(ref response);
-                    }
-
-                    usedRules.Add(rule);
+            foreach (var rule in ParsedConfig!.Rules) {
+                if (!IsValidDirection(fromClient, rule.RuleDirection) || !rule.Criteria.Matches(message)) {
+                    continue;
                 }
+
+                foreach (var transform in rule.OutputTransforms) {
+                    Log.Verbose("Applying rule for message {0} ({1})", 
+                        fromClient ? "from client" : "from server",
+                        transform);
+                    transform.Transform(ref response);
+                }
+
+                usedRules.Add(rule);
             }
 
             foreach (var rule in usedRules) {
@@ -76,6 +82,11 @@ namespace MessageInterceptorPlugin
 
         protected override bool Init()
         {
+            if (ParsedConfig == null) {
+                Log.Error("Null config!");
+                return false;
+            }
+
             Log.Information("Applying the following rules to messages:");
             foreach (var rule in ParsedConfig.Rules) {
                 Log.Information("\tRule: {0}", rule);

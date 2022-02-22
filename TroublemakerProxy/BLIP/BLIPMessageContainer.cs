@@ -16,6 +16,8 @@
 // limitations under the License.
 // 
 
+#nullable enable
+
 using System;
 using System.Runtime.InteropServices;
 
@@ -48,8 +50,8 @@ namespace TroublemakerProxy.BLIP
             blip_message_t* msg = this;
             if (message.Body != null) {
                 _hasExtra = true;
-                IntPtr newBody = Marshal.AllocHGlobal(message.Body?.Length ?? 0);
-                Marshal.Copy(message.Body, 0, newBody, message.Body.Length);
+                var newBody = Marshal.AllocHGlobal(message.Body?.Length ?? 0);
+                Marshal.Copy(message.Body!, 0, newBody, message.Body!.Length);
                 msg->body_size = (ulong) message.Body.Length;
                 msg->body = (byte*) newBody.ToPointer();
             } else {
@@ -59,7 +61,7 @@ namespace TroublemakerProxy.BLIP
 
             if (message.Properties != null) {
                 _hasExtra = true;
-                IntPtr newProps = Marshal.StringToCoTaskMemUTF8(message.Properties);
+                var newProps = Marshal.StringToCoTaskMemUTF8(message.Properties);
                 msg->properties = (byte*) newProps.ToPointer();
             } else {
                 msg->properties = null;

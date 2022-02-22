@@ -15,52 +15,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#nullable enable
+
 using System;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
+using JetBrains.Annotations;
 using Newtonsoft.Json;
-
+using Serilog;
 using sly.parser.generator;
 
 using TroublemakerInterfaces;
 
 namespace DisconnectionPlugin
 {
+    [UsedImplicitly]
     public sealed class DisconnectionPlugin : TroublemakerPluginBase<Configuration>
     {
         #region Variables
 
         private NetworkAction _nextAction;
-        private Pattern _pattern;
+        private Pattern? _pattern;
         private DateTime? _started;
 
         #endregion
 
         #region Properties
 
-        public override TamperStyle Style => ParsedConfig.DisconnectType == DisconnectType.BLIPErrorMessage
+        public override TamperStyle Style => ParsedConfig?.DisconnectType == DisconnectType.BLIPErrorMessage
             ? TamperStyle.Response
             : TamperStyle.Response | TamperStyle.Network;
 
         #endregion
 
+        #region Constructors
+
+        public DisconnectionPlugin(ILogger log) : base(log)
+        {
+        }
+
+        #endregion
+
         #region Private Methods
 
-        private async Task<BLIPMessage> SetupDisconnect(ulong number)
+        private async Task<BLIPMessage?> SetupDisconnect(ulong number)
         {
-            if (ParsedConfig.DisconnectType == DisconnectType.BLIPErrorMessage) {
-                return new BLIPMessage
-                {
-                    Type = MessageType.Error,
-                    MessageNumber = number,
-                    Properties = "Error-Domain:HTTP:Error-Code:500",
-                    Body = Encoding.ASCII.GetBytes("The server is on fire!")
-                };
-            }
-
-            switch (ParsedConfig.DisconnectType) {
+            switch (ParsedConfig?.DisconnectType) {
                 case DisconnectType.WebsocketClose:
                     _nextAction = NetworkAction.CloseWebSocket;
                     break;
@@ -70,6 +71,16 @@ namespace DisconnectionPlugin
                 case DisconnectType.Timeout:
                     await Task.Delay(TimeSpan.FromMinutes(2));
                     break;
+                case DisconnectType.BLIPErrorMessage:
+                    return new BLIPMessage
+                    {
+                        Type = MessageType.Error,
+                        MessageNumber = number,
+                        Properties = "Error-Domain:HTTP:Error-Code:500",
+                        Body = Encoding.ASCII.GetBytes("The server is on fire!")
+                    };
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
 
             return null;
@@ -82,13 +93,11 @@ namespace DisconnectionPlugin
         public override Task<NetworkAction> HandleNetworkStage(NetworkStage stage, int size) =>
             Task.FromResult(_nextAction);
 
-        public override Task<BLIPMessage> HandleResponseStage(BLIPMessage message, bool fromClient)
+        public override Task<BLIPMessage?> HandleResponseStage(BLIPMessage message, bool fromClient)
         {
-            if (_started == null) {
-                _started = DateTime.Now;
-            }
+            _started ??= DateTime.Now;
 
-            return _pattern.Evaluate(message, DateTime.Now - _started.Value) 
+            return _pattern?.Evaluate(message, DateTime.Now - _started.Value) == true
                 ? SetupDisconnect(message.MessageNumber) 
                 : Task.FromResult(default(BLIPMessage));
         }
@@ -104,6 +113,11 @@ namespace DisconnectionPlugin
                 return false;
             }
 
+            if (ParsedConfig == null) {
+                Log.Error("Null config!");
+                return false;
+            }
+
             foreach (var clause in ParsedConfig.PatternClauses) {
                 var parseResult = parser.Result.Parse(clause.ToLowerInvariant());
                 if (parseResult.IsError) {
@@ -115,7 +129,13 @@ namespace DisconnectionPlugin
                 _pattern = parseResult.Result;
             }
 
-            return true;
+            if (_pattern != null) {
+                return true;
+            }
+
+            Log.Error("No pattern clauses provided!");
+            return false;
+
         }
 
         #endregion

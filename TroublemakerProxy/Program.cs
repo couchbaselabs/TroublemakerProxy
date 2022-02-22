@@ -16,6 +16,8 @@
 // limitations under the License.
 // 
 
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,19 +27,13 @@ using System.Net.WebSockets;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-
 using JetBrains.Annotations;
-
 using McMaster.Extensions.CommandLineUtils;
 using McMaster.NETCore.Plugins;
-
 using Newtonsoft.Json;
-
 using Serilog;
 using Serilog.Events;
-
 using TroublemakerInterfaces;
-
 using TroublemakerProxy.BLIP;
 
 namespace TroublemakerProxy
@@ -46,7 +42,7 @@ namespace TroublemakerProxy
     {
         #region Public Methods
 
-        public static void SafeSwap<T>(ref T old, T @new) where T : class, IDisposable
+        public static void SafeSwap<T>(ref T? old, T? @new) where T : class, IDisposable
         {
             if (Object.ReferenceEquals(old, @new)) {
                 return;
@@ -56,38 +52,48 @@ namespace TroublemakerProxy
             oldRef?.Dispose();
         }
 
+        public static void SafeSwapNonNull<T>(ref T old, T @new) where T : class, IDisposable
+        {
+            if (Object.ReferenceEquals(old, @new)) {
+                return;
+            }
+
+            var oldRef = Interlocked.Exchange(ref old, @new);
+            oldRef.Dispose();
+        }
+
         #endregion
     }
 
     [HelpOption]
-    class Program
+    [UsedImplicitly]
+    internal class Program
     {
-        #region Variables
-
-        [NotNull] private static readonly HashSet<string> ValidProtocols = new HashSet<string>
-        {
-            "BLIP_3+CBMobile_3", "BLIP_3+CBMobile_2"
-        };
+        #region Constants
 
         // Trial and error for this list since there is no API to get what headers are set
         // automatically on ClientWebSocket
-        [NotNull] private static readonly HashSet<string> ExcludedHeaders = new HashSet<string>
+        private static readonly HashSet<string> ExcludedHeaders = new()
         {
             "Sec-WebSocket-Version", "Sec-WebSocket-Key", "Connection", "Upgrade"
         };
 
-        [NotNull] private readonly HttpListener _listener = new HttpListener();
-        [NotNull] private readonly List<ITroublemakerPlugin> _plugins = new List<ITroublemakerPlugin>();
-        [NotNull] private readonly byte[] _readWriteBuffer = new byte[32 * 1024];
+        #endregion
 
-        private BLIPConnectionContainer _connectionFromClient;
-        private BLIPConnectionContainer _connectionFromServer;
-        [NotNull] private MemoryStream _currentClientMessage = new MemoryStream();
-        [NotNull] private MemoryStream _currentServerMessage = new MemoryStream();
-        private WebSocket _fromClient;
-        private ILogger _logger;
-        private Configuration _parsedConfig;
-        private ClientWebSocket _toRemote;
+        #region Variables
+
+        private readonly HttpListener _listener = new();
+        private readonly ILogger _logger = CreateLogger();
+        private readonly List<ITroublemakerPlugin> _plugins = new();
+        private readonly byte[] _readWriteBuffer = new byte[32 * 1024];
+
+        private BLIPConnectionContainer _connectionFromClient = new("From Client");
+        private BLIPConnectionContainer _connectionFromServer = new("From Server");
+        private MemoryStream _currentClientMessage = new();
+        private MemoryStream _currentServerMessage = new();
+        private WebSocket? _fromClient;
+        private Configuration? _parsedConfig;
+        private ClientWebSocket? _toRemote;
 
         #endregion
 
@@ -96,7 +102,8 @@ namespace TroublemakerProxy
         [FileExists]
         [Option(CommandOptionType.SingleValue, Description =
             "The path to the configuration file for the proxy.  The schema file can be found in the repo.")]
-        public string Config { get; set; }
+        [UsedImplicitly] 
+        public string? Config { get; [UsedImplicitly] set; }
 
         #endregion
 
@@ -109,6 +116,45 @@ namespace TroublemakerProxy
 
         #region Private Methods
 
+        private static async Task CloseSocket(WebSocket socket, WebSocketCloseStatus status, string description)
+        {
+            switch (socket.State) {
+                case WebSocketState.Open:
+                    await socket.CloseAsync(status, description, CancellationToken.None);
+                    break;
+                case WebSocketState.CloseReceived:
+                    await socket.CloseOutputAsync(status, description, CancellationToken.None);
+                    break;
+                case WebSocketState.None:
+                case WebSocketState.Connecting:
+                case WebSocketState.CloseSent:
+                case WebSocketState.Closed:
+                case WebSocketState.Aborted:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        private static ILogger CreateLogger()
+        {
+            var logsDir = Path.Combine(Path.GetTempPath(), "Logs");
+            Directory.CreateDirectory(logsDir);
+
+            var logger = new LoggerConfiguration()
+                .MinimumLevel.Verbose()
+                .WriteTo.Console(LogEventLevel.Information,
+                    "[{Timestamp:HH:mm:ss} {Level:u3}] ({SourceContext:l}) {Message:lj}{NewLine}{Exception}")
+                .WriteTo.File(Path.Combine(logsDir, "troublemaker-log.txt"),
+                    rollOnFileSizeLimit: true, fileSizeLimitBytes: 1024 * 1024, retainedFileCountLimit: 5,
+                    outputTemplate:
+                    "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] ({SourceContext:l}) {Message:lj}{NewLine}{Exception}")
+                .CreateLogger().ForContext("SourceContext", "TroublemakerProxy");
+            logger.Information("Logging started ({0})!",
+                Path.Combine(Path.GetTempPath(), "Logs", "troublemaker-log.txt"));
+            return logger;
+        }
+
         private async Task<(byte[] serialized, bool intercepted)> ApplyTransformPlugins(MemoryStream currentMessage,
             bool fromClient)
         {
@@ -119,47 +165,61 @@ namespace TroublemakerProxy
             var connection = fromClient ? _connectionFromClient : _connectionFromServer;
             var otherConnection = fromClient ? _connectionFromServer : _connectionFromClient;
             var intercept = false;
-            using (var messageContainer = connection.ReadMessage(currentMessage)) {
-                var message = messageContainer.CreateMessage();
-                foreach (var plugin in _plugins.Where(x => x.Style.HasFlag(TamperStyle.Message))) {
+
+            using var messageContainer = connection.ReadMessage(currentMessage);
+            var message = messageContainer.CreateMessage();
+            foreach (var plugin in _plugins.Where(x => x.Style.HasFlag(TamperStyle.Message))) {
+                try {
+                    await plugin.HandleMessageStage(ref message, fromClient);
+                } catch (Exception e) {
+                    _logger.Error(e, "Plugin exception during message stage ({0})", plugin.GetType().Name);
+                    throw;
+                }
+            }
+
+            if (message.Type == MessageType.Request) {
+                var responsePlugin = _plugins.FirstOrDefault(x => x.Style.HasFlag(TamperStyle.Response));
+                if (responsePlugin != null) {
                     try {
-                        await plugin.HandleMessageStage(ref message, fromClient);
+                        var response = await responsePlugin.HandleResponseStage(message, fromClient);
+                        if (response != null) {
+                            message = response;
+                            intercept = true;
+                        }
                     } catch (Exception e) {
-                        _logger.Error(e, "Plugin exception during message stage ({0})", plugin.GetType().Name);
+                        _logger.Error(e, "Plugin exception during response stage ({0})",
+                            responsePlugin.GetType().Name);
                         throw;
                     }
                 }
-
-                if (message.Type == MessageType.Request) {
-                    var responsePlugin = _plugins.FirstOrDefault(x => x.Style.HasFlag(TamperStyle.Response));
-                    if (responsePlugin != null) {
-                        try {
-                            var response = await responsePlugin.HandleResponseStage(message, fromClient);
-                            if (response != null) {
-                                message = response;
-                                intercept = true;
-                            }
-                        } catch (Exception e) {
-                            _logger.Error(e, "Plugin exception during response stage ({0})",
-                                responsePlugin.GetType().Name);
-                            throw;
-                        }
-                    }
-                }
-
-                var connectionToSerialize = intercept ? otherConnection : connection;
-                return (connectionToSerialize.SerializeMessage(messageContainer, message), intercept);
             }
+
+            var connectionToSerialize = intercept ? otherConnection : connection;
+            return (connectionToSerialize.SerializeMessage(messageContainer, message), intercept);
         }
 
-
-        private async Task CloseSocket(WebSocket socket, WebSocketCloseStatus status, string description)
+        private bool HandleNetworkAction(NetworkAction action)
         {
-            if (socket.State == WebSocketState.Open) {
-                await socket.CloseAsync(status, description, CancellationToken.None);
-            } else if (socket.State == WebSocketState.CloseReceived) {
-                await socket.CloseOutputAsync(status, description, CancellationToken.None);
+            switch (action) {
+                case NetworkAction.Continue:
+                    return false;
+                case NetworkAction.BreakPipe:
+                    _fromClient?.Abort();
+                    _toRemote?.Abort();
+                    break;
+                case NetworkAction.CloseWebSocket:
+
+                    if (_fromClient == null) {
+                        _logger.Error("Unexpected _fromClient null in HandleNetworkAction");
+                    } else {
+#pragma warning disable CS4014
+                        CloseSocket(_fromClient, WebSocketCloseStatus.ProtocolError, "The server is on fire!");
+#pragma warning restore CS4014
+                    }
+                    break;
             }
+
+            return true;
         }
 
         private async Task ListenForConnection()
@@ -169,66 +229,86 @@ namespace TroublemakerProxy
             if (!nextContext.Request.IsWebSocketRequest) {
                 _logger.Warning("Ignoring non-websocket request to {0}", nextContext.Request.Url);
                 nextContext.Response.Close();
-                var ignore = ListenForConnection().ContinueWith(
-                    t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
+#pragma warning disable CS4014
+                ListenForConnection().ContinueWith(
+                    t => _logger.Error(t.Exception?.InnerException, "Exception in ListenForConnection"),
                     TaskContinuationOptions.OnlyOnFaulted);
+#pragma warning restore CS4014
                 return;
             }
 
-            var builder = new UriBuilder(nextContext.Request.Url)
+            var builder = new UriBuilder(nextContext.Request.Url ??
+                                         throw new ArgumentException("Invalid context received (no url)"))
             {
-                Port = _parsedConfig.ToPort, 
+                Host = _parsedConfig!.ToHost,
+                Port = _parsedConfig.ToPort,
                 Scheme = "ws"
             };
 
             Misc.SafeSwap(ref _toRemote, new ClientWebSocket());
-            foreach(string header in nextContext.Request.Headers) {
-                if(!ExcludedHeaders.Contains(header)) {
-                    if(header == "Sec-WebSocket-Protocol") {
-                        foreach(var protocol in nextContext.Request.Headers[header].Split(',')) {
+            foreach (string header in nextContext.Request.Headers) {
+                if (ExcludedHeaders.Contains(header)) {
+                    continue;
+                }
+
+                switch (header) {
+                    case "Sec-WebSocket-Protocol":
+                    {
+                        foreach (var protocol in nextContext.Request.Headers[header]!.Split(',')) {
                             _logger.Verbose($"Adding websocket subprotocol {protocol}");
-                            _toRemote.Options.AddSubProtocol(protocol);
+                            _toRemote!.Options.AddSubProtocol(protocol);
                         }
-                    } else if(header == "Host") {
-                        _logger.Verbose($"Adding altered header 'Host' from origin...");
-                        _toRemote.Options.SetRequestHeader(header, nextContext.Request.Headers[header]
-                            .Replace(_parsedConfig.FromPort.ToString(), _parsedConfig.ToPort.ToString()));
-                    } else {
-                        _logger.Verbose($"Adding header '{header}' from origin...");
-                        _toRemote.Options.SetRequestHeader(header, nextContext.Request.Headers[header]);
+
+                        break;
                     }
-                } 
+                    case "Host":
+                    {
+                        _logger.Verbose("Adding altered header 'Host' from origin...");
+                        _toRemote!.Options.SetRequestHeader(header, nextContext.Request.Headers[header]!
+                            .Replace(_parsedConfig.FromPort.ToString(), _parsedConfig.ToPort.ToString()));
+                        break;
+                    }
+                    default:
+                    {
+                        _logger.Verbose($"Adding header '{header}' from origin...");
+                        _toRemote!.Options.SetRequestHeader(header, nextContext.Request.Headers[header]);
+                        break;
+                    }
+                }
             }
 
             try {
-                await _toRemote.ConnectAsync(builder.Uri, CancellationToken.None);
-            } catch(WebSocketException e) {
-                if(e.WebSocketErrorCode == WebSocketError.NotAWebSocket)  {
-                    // This is a horrid dance, WebSocketException doesn't give any information
-                    // about the underlying error code.
-                    var regex = new Regex("The server returned status code '(\\d+)' when status code '101' was expected.");
-                    var match = regex.Match(e.Message);
-                    if(match.Success)
-                    {
-                        var returnCode = Int32.Parse(match.Groups[1].Value);
-                        _logger.Verbose($"Got error code '{returnCode}' from destination, returning to origin...");
-                        nextContext.Response.StatusCode = returnCode;
+                await _toRemote!.ConnectAsync(builder.Uri, CancellationToken.None);
+            } catch (WebSocketException e) {
+                if (e.WebSocketErrorCode != WebSocketError.NotAWebSocket) {
+                    throw;
+                }
 
-                        if(returnCode == 401) {
-                            // Hope this doesn't change because there is no bleeding way to access it, even via reflection
-                            // with ClientWebSocket
-                            nextContext.Response.AddHeader("Www-Authenticate", "Basic realm=\"Couchbase Sync Gateway\"");
-                        }
+                // This is a horrid dance, WebSocketException doesn't give any information
+                // about the underlying error code.
+                var regex = new Regex("The server returned status code '(\\d+)' when status code '101' was expected.");
+                var match = regex.Match(e.Message);
+                if (!match.Success) {
+                    throw;
+                }
 
-                        nextContext.Response.Close();
-                        var ignore = ListenForConnection().ContinueWith(
-                            t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
-                            TaskContinuationOptions.OnlyOnFaulted);
-                        return;
-                    }
-                } 
+                var returnCode = Int32.Parse(match.Groups[1].Value);
+                _logger.Verbose($"Got error code '{returnCode}' from destination, returning to origin...");
+                nextContext.Response.StatusCode = returnCode;
 
-                throw;
+                if (returnCode == 401) {
+                    // Hope this doesn't change because there is no bleeding way to access it, even via reflection
+                    // with ClientWebSocket
+                    nextContext.Response.AddHeader("Www-Authenticate", "Basic realm=\"Couchbase Sync Gateway\"");
+                }
+
+                nextContext.Response.Close();
+#pragma warning disable CS4014
+                ListenForConnection().ContinueWith(
+                    t => _logger.Error(t.Exception?.InnerException, "Exception in ListenForConnection"),
+                    TaskContinuationOptions.OnlyOnFaulted);
+#pragma warning restore CS4014
+                return;
             }
 
             _logger.Information("Established websocket connection to server...");
@@ -236,35 +316,39 @@ namespace TroublemakerProxy
 
             _logger.Information("Established websocket connection to client...");
             Misc.SafeSwap(ref _fromClient, webSocket.WebSocket);
-            
-            Misc.SafeSwap(ref _connectionFromClient, new BLIPConnectionContainer("From Client"));
-            Misc.SafeSwap(ref _connectionFromServer, new BLIPConnectionContainer("From Server"));
 
-            var ignore2 = ReadFromClient().ContinueWith(
-                t => _logger.Error(t.Exception.InnerException, "Exception in ReadFromClient"),
+            Misc.SafeSwapNonNull(ref _connectionFromClient, new BLIPConnectionContainer("From Client"));
+            Misc.SafeSwapNonNull(ref _connectionFromServer, new BLIPConnectionContainer("From Server"));
+
+#pragma warning disable CS4014
+            ReadFromClient().ContinueWith(
+                t => _logger.Error(t.Exception?.InnerException, "Exception in ReadFromClient"),
                 TaskContinuationOptions.OnlyOnFaulted);
-            ignore2 = ReadFromServer().ContinueWith(
-                t => _logger.Error(t.Exception.InnerException, "Exception in ReadFromServer"),
+            ReadFromServer().ContinueWith(
+                t => _logger.Error(t.Exception?.InnerException, "Exception in ReadFromServer"),
                 TaskContinuationOptions.OnlyOnFaulted);
+#pragma warning restore CS4014
         }
 
         private void LoadPlugins()
         {
-            if (_parsedConfig.Plugins == null) {
+            if (_parsedConfig!.Plugins == null) {
                 return;
             }
 
             foreach (var plugin in _parsedConfig.Plugins) {
                 var loader = PluginLoader.CreateFromAssemblyFile(plugin.Path,
-                    new[] {typeof(ITroublemakerPlugin), typeof(ILogger), typeof(JsonSerializer)});
+                    new[] { typeof(ITroublemakerPlugin), typeof(ILogger), typeof(JsonSerializer) });
                 foreach (var pluginType in loader
-                    .LoadDefaultAssembly()
-                    .GetTypes()
-                    .Where(x => typeof(ITroublemakerPlugin).IsAssignableFrom(x) && !x.IsAbstract)) {
-                    var pluginObj = (ITroublemakerPlugin) Activator.CreateInstance(pluginType);
-                    if (pluginObj is TroublemakerPluginBase libraryClass) {
-                        libraryClass.Log = _logger.ForContext("SourceContext", pluginObj.GetType().Name);
-                        libraryClass.Log.Information("Initializing...");
+                             .LoadDefaultAssembly()
+                             .GetTypes()
+                             .Where(x => typeof(ITroublemakerPlugin).IsAssignableFrom(x) && !x.IsAbstract)) {
+                    ITroublemakerPlugin pluginObj;
+                    if (typeof(TroublemakerPluginBase).IsAssignableFrom(pluginType)) {
+                        pluginObj = (ITroublemakerPlugin)Activator.CreateInstance(pluginType, _logger.ForContext("SourceContext", pluginType.Name))!;
+                        ((TroublemakerPluginBase)pluginObj).Log.Information("Initializing...");
+                    } else {
+                        pluginObj = (ITroublemakerPlugin)Activator.CreateInstance(pluginType)!;
                     }
 
                     if (plugin.ConfigPath != null) {
@@ -276,18 +360,17 @@ namespace TroublemakerProxy
                             continue;
                         }
 
-                        using (var stream = File.OpenRead(configFilePath)) {
-                            try {
-                                var result = pluginObj.Configure(stream);
-                                if (!result) {
-                                    _logger.Warning("Unsuccessful configure for {0}", plugin.Path);
-                                    continue;
-                                }
-                            } catch (Exception e) {
-                                _logger.Warning("Exception caught while configuring plugin at {0}:{1}{2}",
-                                    plugin.Path, Environment.NewLine, e);
+                        using var stream = File.OpenRead(configFilePath);
+                        try {
+                            var result = pluginObj.Configure(stream);
+                            if (!result) {
+                                _logger.Warning("Unsuccessful configure for {0}", plugin.Path);
                                 continue;
                             }
+                        } catch (Exception e) {
+                            _logger.Warning("Exception caught while configuring plugin at {0}:{1}{2}",
+                                plugin.Path, Environment.NewLine, e);
+                            continue;
                         }
                     }
 
@@ -296,38 +379,42 @@ namespace TroublemakerProxy
             }
         }
 
+        // ReSharper disable once UnusedMember.Local
         private async Task<int> OnExecute()
         {
             Console.WriteLine("Press Ctrl+C to exit...");
-            var configToUse = Config ?? Prompt.GetString("Enter the path to the configuration file: ");
+            var configToUse = Config;
+            while (configToUse == null) {
+                configToUse = Prompt.GetString("Enter the path to the configuration file: ");
+            }
 
             using (var streamReader = new StreamReader(File.OpenRead(configToUse)))
             using (var jsonReader = new JsonTextReader(streamReader)) {
                 _parsedConfig = JsonSerializer.CreateDefault().Deserialize<Configuration>(jsonReader);
             }
 
-            SetupLogger();
-
 #pragma warning disable CS0162 // Unreachable code detected
             _logger.Information($"Starting TroublemakerProxy {ThisAssembly.Git.Tag}");
-            if(ThisAssembly.Git.IsDirty) {
+            if (ThisAssembly.Git.IsDirty) {
                 _logger.Warning("Repository has been modified locally!");
-            } 
+            }
 #pragma warning restore CS0162 // Unreachable code detected
 
             LoadPlugins();
 
-            _listener.Prefixes.Add($"http://*:{_parsedConfig.FromPort}/");
+            _listener.Prefixes.Add($"http://*:{_parsedConfig!.FromPort}/");
             _listener.Start();
-            var ignore = ListenForConnection().ContinueWith(
-                t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
+
+#pragma warning disable CS4014
+            ListenForConnection().ContinueWith(
+                t => _logger.Error(t.Exception?.InnerException, "Exception in ListenForConnection"),
                 TaskContinuationOptions.OnlyOnFaulted);
-            ;
+#pragma warning restore CS4014
             _logger.Information("Listening on port {0}...", _parsedConfig.FromPort);
 
 
             var waitHandle = new SemaphoreSlim(0, 1);
-            Console.CancelKeyPress += (sender, args) => waitHandle.Release();
+            Console.CancelKeyPress += (_, _) => waitHandle.Release();
             await waitHandle.WaitAsync().ConfigureAwait(false);
 
             return 0;
@@ -341,15 +428,15 @@ namespace TroublemakerProxy
             string fromName, toName;
             if (client) {
                 buffer = new ArraySegment<byte>(_readWriteBuffer, 0, 16 * 1024);
-                socketFrom = _fromClient;
-                socketTo = _toRemote;
+                socketFrom = _fromClient!;
+                socketTo = _toRemote!;
                 fromName = "client";
                 toName = "remote";
                 currentMessage = _currentClientMessage;
             } else {
                 buffer = new ArraySegment<byte>(_readWriteBuffer, 16 * 1024, 16 * 1024);
-                socketFrom = _toRemote;
-                socketTo = _fromClient;
+                socketFrom = _toRemote!;
+                socketTo = _fromClient!;
                 fromName = "remote";
                 toName = "client";
                 currentMessage = _currentServerMessage;
@@ -361,7 +448,7 @@ namespace TroublemakerProxy
                 return;
             }
 
-            WebSocketReceiveResult received = null;
+            WebSocketReceiveResult received;
             try {
                 _logger.Verbose($"Sleeping until next input from {fromName}...");
                 received = await socketFrom.ReceiveAsync(buffer, CancellationToken.None);
@@ -373,7 +460,7 @@ namespace TroublemakerProxy
             if (received.MessageType == WebSocketMessageType.Close) {
                 _logger.Verbose($"Closing {toName} socket in response to close message...");
                 await CloseSocket(socketTo, received.CloseStatus ?? WebSocketCloseStatus.NormalClosure,
-                    received.CloseStatusDescription);
+                    received.CloseStatusDescription ?? String.Empty);
                 return;
             }
 
@@ -415,7 +502,7 @@ namespace TroublemakerProxy
                 var socketToSend = transformResult.intercepted ? socketFrom : socketTo;
                 await SendNoop(transformResult, client ? _connectionFromClient : _connectionFromServer, socketTo);
                 await socketToSend.SendAsync(writeBuffer, WebSocketMessageType.Binary, true, CancellationToken.None);
-                currentMessage.Dispose();
+                await currentMessage.DisposeAsync();
                 if (client) {
                     _currentClientMessage = new MemoryStream();
                 } else {
@@ -424,26 +511,9 @@ namespace TroublemakerProxy
             }
         }
 
-        private bool HandleNetworkAction(NetworkAction action)
-        {
-            switch (action) {
-                case NetworkAction.Continue:
-                    return false;
-                case NetworkAction.BreakPipe:
-                    _fromClient.Abort();
-                    _toRemote.Abort();
-                    break;
-                case NetworkAction.CloseWebSocket:
-                    CloseSocket(_fromClient, WebSocketCloseStatus.ProtocolError, "The server is on fire!");
-                    break;       
-            }
-
-            return true;
-        }
-
         private async Task ReadFromClient()
         {
-            while (_fromClient.State == WebSocketState.Open || _fromClient.State == WebSocketState.CloseReceived) {
+            while (_fromClient!.State == WebSocketState.Open || _fromClient.State == WebSocketState.CloseReceived) {
                 try {
                     await Read(true);
                 } catch (Exception) {
@@ -452,15 +522,16 @@ namespace TroublemakerProxy
             }
 
             _logger.Information("Client disconnected...");
-            var ignore = ListenForConnection().ContinueWith(
-                t => _logger.Error(t.Exception.InnerException, "Exception in ListenForConnection"),
+#pragma warning disable CS4014
+            ListenForConnection().ContinueWith(
+                t => _logger.Error(t.Exception?.InnerException, "Exception in ListenForConnection"),
                 TaskContinuationOptions.OnlyOnFaulted);
-            ;
+#pragma warning restore CS4014
         }
 
         private async Task ReadFromServer()
         {
-            while (_toRemote.State == WebSocketState.Open || _toRemote.State == WebSocketState.CloseReceived) {
+            while (_toRemote!.State == WebSocketState.Open || _toRemote.State == WebSocketState.CloseReceived) {
                 try {
                     await Read(false);
                 } catch (Exception) {
@@ -487,29 +558,10 @@ namespace TroublemakerProxy
                 Type = MessageType.Request
             };
 
-            using (var msgContainer = new BLIPMessageContainer()) {
-                var msgBytes = container.SerializeMessage(msgContainer, msg);
-                await connection.SendAsync(new ArraySegment<byte>(msgBytes), WebSocketMessageType.Binary, true,
-                    CancellationToken.None).ConfigureAwait(false);
-            }
-        }
-
-        private void SetupLogger()
-        {
-            var logsDir = Path.Combine(Path.GetTempPath(), "Logs");
-            Directory.CreateDirectory(logsDir);
-
-            _logger = new LoggerConfiguration()
-                .MinimumLevel.Verbose()
-                .WriteTo.Console(LogEventLevel.Information,
-                    "[{Timestamp:HH:mm:ss} {Level:u3}] ({SourceContext:l}) {Message:lj}{NewLine}{Exception}")
-                .WriteTo.File(Path.Combine(logsDir, "troublemaker-log.txt"),
-                    rollOnFileSizeLimit: true, fileSizeLimitBytes: 1024 * 1024, retainedFileCountLimit: 5,
-                    outputTemplate:
-                    "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] ({SourceContext:l}) {Message:lj}{NewLine}{Exception}")
-                .CreateLogger().ForContext("SourceContext", "TroublemakerProxy");
-            _logger.Information("Logging started ({0})!",
-                Path.Combine(Path.GetTempPath(), "Logs", "troublemaker-log.txt"));
+            using var msgContainer = new BLIPMessageContainer();
+            var msgBytes = container.SerializeMessage(msgContainer, msg);
+            await connection.SendAsync(new ArraySegment<byte>(msgBytes), WebSocketMessageType.Binary, true,
+                CancellationToken.None).ConfigureAwait(false);
         }
 
         #endregion

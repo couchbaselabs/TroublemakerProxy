@@ -16,6 +16,8 @@
 // limitations under the License.
 // 
 
+#nullable enable
+
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -30,13 +32,8 @@ namespace TroublemakerProxy.BLIP
     {
         #region Variables
 
-        private MemoryStream _buffer = new MemoryStream();
-
-        #endregion
-
-        #region Properties
-
-        public string Name { get; }
+        private MemoryStream _buffer = new();
+        private readonly string _name;
 
         #endregion
 
@@ -48,9 +45,9 @@ namespace TroublemakerProxy.BLIP
 
         }
 
-        public BLIPConnectionContainer(blip_connection_t* nativeHandle, string name) : base((IntPtr) nativeHandle)
+        private BLIPConnectionContainer(blip_connection_t* nativeHandle, string name) : base((IntPtr) nativeHandle)
         {
-            Name = name;
+            _name = name;
         }
 
         #endregion
@@ -104,7 +101,7 @@ namespace TroublemakerProxy.BLIP
 
         public override string ToString()
         {
-            return Name;
+            return _name;
         }
 
         #endregion

@@ -15,14 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#nullable enable
+
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-
+using System.Linq;
+using JetBrains.Annotations;
 using sly.lexer;
 using sly.parser.generator;
 
 using TroublemakerInterfaces;
+// ReSharper disable UnusedMember.Global
 
 namespace DisconnectionPlugin
 {
@@ -104,12 +107,13 @@ namespace DisconnectionPlugin
 
     internal sealed class PatternParser
     {
-        private readonly Pattern _result = new Pattern();
+        private readonly Pattern _result = new();
 
         [Production("time: Integer time_part")]
+        [UsedImplicitly]
         public Pattern Time(Token<PatternToken> value, Pattern timePart)
         {
-            switch ((PatternToken)timePart.Aggregate) {
+            switch ((PatternToken)(timePart.Aggregate ?? throw new ApplicationException("Null aggregate"))) {
                 case PatternToken.Minutes:
                     timePart.Aggregate = TimeSpan.FromMinutes(value.IntValue);
                     break;
@@ -119,6 +123,16 @@ namespace DisconnectionPlugin
                 case PatternToken.Milliseconds:
                     timePart.Aggregate = TimeSpan.FromMilliseconds(value.IntValue);
                     break;
+                case PatternToken.Integer:
+                case PatternToken.Identifier:
+                case PatternToken.Equal:
+                case PatternToken.After:
+                case PatternToken.Before:
+                case PatternToken.BlipTypeRequest:
+                case PatternToken.BlipTypeResponse:
+                case PatternToken.BlipTypeError:
+                case PatternToken.BlipType:
+                case PatternToken.BlipMsgNo:
                 default:
                     throw new ParserConfigurationException("Invalid time type!");
             }
@@ -132,6 +146,7 @@ namespace DisconnectionPlugin
         [Production("time_part: Minutes")]
         [Production("time_part: Seconds")]
         [Production("time_part: Milliseconds")]
+        [UsedImplicitly]
         public Pattern TokenPart(Token<PatternToken> type)
         {
             _result.Aggregate = type.TokenID;
@@ -140,31 +155,34 @@ namespace DisconnectionPlugin
 
         [Production("blip_comparison: Before time")]
         [Production("blip_comparison: After time")]
+        [UsedImplicitly]
         public Pattern TimeOp(Token<PatternToken> type, Pattern aggregate)
         {
-            var time = (TimeSpan) aggregate.Aggregate;
+            var time = (TimeSpan) (aggregate.Aggregate ?? throw new ApplicationException("Null aggregate"));
             if (type.TokenID == PatternToken.Before) {
-                _result.AddClause((msg, timeInput) => timeInput < time);
+                _result.AddClause((_, timeInput) => timeInput < time);
             } else {
-                _result.AddClause((msg, timeInput) => timeInput > time);
+                _result.AddClause((_, timeInput) => timeInput > time);
             }
             return _result;
         }
 
         [Production("blip_comparison: BlipMsgNo Equal Integer")]
+        [UsedImplicitly]
         public Pattern BlipMsgNoComparison(Token<PatternToken> msgNoToken, Token<PatternToken> equal, Token<PatternToken> value)
         {
             var val = value.IntValue;
-            _result.AddClause((msg, timeInput) => msg.MessageNumber == (ulong)val);
+            _result.AddClause((msg, _) => msg.MessageNumber == (ulong)val);
             return _result;
         }
 
         [Production("blip_comparison: BlipType Equal blip_msg_type")]
+        [UsedImplicitly]
         public Pattern BlipTypeComparison(Token<PatternToken> msgTypeToken, Token<PatternToken> equal,
             Pattern type)
         {
-            var typeValue = (PatternToken) type.Aggregate;
-            _result.AddClause((msg, timeInput) =>
+            var typeValue = (PatternToken) (type.Aggregate ?? throw new ApplicationException("Null aggregate"));
+            _result.AddClause((msg, _) =>
             {
                 switch (typeValue) {
                     case PatternToken.BlipTypeRequest:
@@ -173,6 +191,19 @@ namespace DisconnectionPlugin
                         return msg.Type == MessageType.Response;
                     case PatternToken.BlipTypeError:
                         return msg.Type == MessageType.Error;
+                    case PatternToken.Integer:
+                    case PatternToken.Identifier:
+                    case PatternToken.Equal:
+                    case PatternToken.After:
+                    case PatternToken.Before:
+                    case PatternToken.Minutes:
+                    case PatternToken.Seconds:
+                    case PatternToken.Milliseconds:
+                    case PatternToken.BlipType:
+                    case PatternToken.BlipMsgNo:
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
                 }
 
                 return false;
@@ -184,21 +215,15 @@ namespace DisconnectionPlugin
 
     internal sealed class Pattern
     {
-        private readonly List<Func<BLIPMessage, TimeSpan, bool>> _clauses = new List<Func<BLIPMessage, TimeSpan, bool>>();
+        private readonly List<Func<BLIPMessage, TimeSpan, bool>> _clauses = new();
 
-        public object Aggregate { get; set; }
+        public object? Aggregate { get; set; }
 
         public void AddClause(Func<BLIPMessage,  TimeSpan,bool> clause) => _clauses.Add(clause);
 
         public bool Evaluate(BLIPMessage msg, TimeSpan elapsed)
         {
-            foreach (var clause in _clauses) {
-                if (!clause(msg, elapsed)) {
-                    return false;
-                }
-            }
-
-            return true;
+            return _clauses.All(clause => clause(msg, elapsed));
         }
     }
 }

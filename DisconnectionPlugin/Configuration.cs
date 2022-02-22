@@ -15,8 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#nullable enable
+
 using System;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using JetBrains.Annotations;
 
 namespace DisconnectionPlugin
 {
@@ -28,11 +32,15 @@ namespace DisconnectionPlugin
         Timeout
     }
 
+    [UsedImplicitly]
     public sealed class Configuration
     {
         [DefaultValue(DisconnectType.PipeBreak)]
+        [UsedImplicitly]
         public DisconnectType DisconnectType { get; set; }
 
-        public string[] PatternClauses { get; set; }
+        [UsedImplicitly]
+        [Required]
+        public string[] PatternClauses { get; set; } = Array.Empty<string>();
     }
 }

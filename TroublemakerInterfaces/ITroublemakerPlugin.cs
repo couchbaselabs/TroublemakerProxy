@@ -16,6 +16,8 @@
 // limitations under the License.
 // 
 
+#nullable enable
+
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -93,7 +95,7 @@ namespace TroublemakerInterfaces
         /// <param name="fromClient">Whether or not the request is from the local side</param>
         /// <returns>An awaitable task holding the response to be sent.  If <c>null</c> is returned, then
         /// the interception is cancelled and the REQ is sent normally</returns>
-        Task<BLIPMessage> HandleResponseStage(BLIPMessage message, bool fromClient);
+        Task<BLIPMessage?> HandleResponseStage(BLIPMessage message, bool fromClient);
 
         #endregion
     }
@@ -112,7 +114,16 @@ namespace TroublemakerInterfaces
         /// <summary>
         /// The log object to write logs for this plugin
         /// </summary>
-        protected internal ILogger Log { get; internal set; }
+        protected internal ILogger Log { get; }
+
+        #endregion
+
+        #region Constructors
+
+        protected TroublemakerPluginBase(ILogger log)
+        {
+            Log = log;
+        }
 
         #endregion
 
@@ -132,8 +143,8 @@ namespace TroublemakerInterfaces
         public virtual Task<NetworkAction> HandleNetworkStage(NetworkStage stage, int size) => Task.FromResult(NetworkAction.Continue);
         
         /// <inheritdoc />
-        public virtual Task<BLIPMessage> HandleResponseStage(BLIPMessage message, bool fromClient) =>
-            Task.FromResult<BLIPMessage>(null);
+        public virtual Task<BLIPMessage?> HandleResponseStage(BLIPMessage message, bool fromClient) =>
+            Task.FromResult<BLIPMessage?>(null);
 
         #endregion
     }
@@ -147,7 +158,15 @@ namespace TroublemakerInterfaces
     {
         #region Properties
 
-        protected T ParsedConfig { get; private set; }
+        protected T? ParsedConfig { get; private set; }
+
+        #endregion
+
+        #region Constructors
+
+        protected TroublemakerPluginBase(ILogger log) : base(log)
+        {
+        }
 
         #endregion
 
@@ -167,11 +186,10 @@ namespace TroublemakerInterfaces
         /// <inheritdoc />
         public sealed override bool Configure(Stream configData)
         {
-            using (var reader = new StreamReader(configData))
-            using (var jsonReader = new JsonTextReader(reader)) {
-                ParsedConfig = JsonSerializer.CreateDefault().Deserialize<T>(jsonReader);
-                return Init();
-            }
+            using var reader = new StreamReader(configData);
+            using var jsonReader = new JsonTextReader(reader);
+            ParsedConfig = JsonSerializer.CreateDefault().Deserialize<T>(jsonReader);
+            return Init();
         }
 
         #endregion

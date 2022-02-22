@@ -16,7 +16,11 @@
 //  limitations under the License.
 // 
 
+#nullable enable
+
+using System;
 using System.ComponentModel.DataAnnotations;
+using JetBrains.Annotations;
 
 namespace TroublemakerProxy
 {
@@ -24,6 +28,7 @@ namespace TroublemakerProxy
     /// <summary>
     /// The configuration class for the overall troublemaker proxy
     /// </summary>
+    [UsedImplicitly]
     public sealed class Configuration
     {
         #region Properties
@@ -31,17 +36,28 @@ namespace TroublemakerProxy
         /// <summary>
         /// The port to listen on for incoming connections
         /// </summary>
-        [Required] public int FromPort { get; set; }
+        [UsedImplicitly]
+        [Required] 
+        public int FromPort { get; set; }
 
         /// <summary>
         /// The plugins to load for use in this session
         /// </summary>
-        public Plugin[] Plugins { get; set; }
+        [UsedImplicitly]
+        public Plugin[]? Plugins { get; set; }
+
+        /// <summary>
+        /// The host to connect to for outgoing connections (default localhost)
+        /// </summary>
+        [UsedImplicitly]
+        public string ToHost { get; set; } = "localhost";
 
         /// <summary>
         /// The port to connect to for outgoing connections
         /// </summary>
-        [Required] public int ToPort { get; set; }
+        [UsedImplicitly]
+        [Required] 
+        public int ToPort { get; set; }
 
         #endregion
     }
@@ -50,6 +66,7 @@ namespace TroublemakerProxy
     /// A class describing an assembly containing an <see cref="TroublemakerInterfaces.ITroublemakerPlugin"/>
     /// implementation (or more).
     /// </summary>
+    [UsedImplicitly]
     public sealed class Plugin
     {
         #region Properties
@@ -57,12 +74,15 @@ namespace TroublemakerProxy
         /// <summary>
         /// The path to the configuration file for the plugin, if needed
         /// </summary>
-        public string ConfigPath { get; set; }
+        [UsedImplicitly]
+        public string? ConfigPath { get; set; }
 
         /// <summary>
         /// The path to the assembly file containing the plugin class
         /// </summary>
-        [Required] public string Path { get; set; }
+        [UsedImplicitly]
+        [Required]
+        public string Path { get; set; } = String.Empty;
 
         #endregion
     }

@@ -32,10 +32,10 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Setup .NET SDK 5.0
+    - name: Setup .NET SDK 6.0
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 5.0.x
+        dotnet-version: 6.0.x
 
     - name: Create Build Environment
       # Create a build directory, as our working directory for all subsequent commands
@@ -63,7 +63,7 @@ jobs:
         tag=$(git describe --tags --abbrev=0)
         release_name="TroublemakerProxy-$tag-${{ matrix.rid }}"
 
-        dotnet publish -r ${{ matrix.rid }} -c Release -f net5.0 -o "$release_name" --self-contained true -p:PublishSingleFile=true TroublemakerProxy/TroublemakerProxy.csproj
+        dotnet publish -r ${{ matrix.rid }} -c Release -f net6.0 -o "$release_name" --self-contained true -p:PublishSingleFile=true TroublemakerProxy/TroublemakerProxy.csproj
         if [ "${{ matrix.kind }}" == "windows" ]; then
           7z a -tzip "${release_name}.zip" "./${release_name}/*"
         else
@@ -92,10 +92,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Setup .NET SDK 5.0
+    - name: Setup .NET SDK 6.0
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: 5.0.x
+        dotnet-version: 6.0.x
 
     - name: Publish ${{ matrix.plugin }}Plugin
       working-directory: ${{github.workspace}}
@@ -104,7 +104,7 @@ jobs:
         tag=$(git describe --tags --abbrev=0)
         release_name="${{ matrix.plugin }}Plugin-$tag"
 
-        dotnet publish -c Release -f net5.0 -o "$release_name" ${{ matrix.plugin }}Plugin/${{ matrix.plugin }}Plugin.csproj
+        dotnet publish -c Release -f net6.0 -o "$release_name" ${{ matrix.plugin }}Plugin/${{ matrix.plugin }}Plugin.csproj
         7z a -tzip "${release_name}.zip" "./${release_name}/*"
 
         rm -r "$release_name"

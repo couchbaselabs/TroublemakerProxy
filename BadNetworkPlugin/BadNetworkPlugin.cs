@@ -18,9 +18,9 @@
 
 using System;
 using System.Threading.Tasks;
-
+using JetBrains.Annotations;
 using MathNet.Numerics.Distributions;
-
+using Serilog;
 using TroublemakerInterfaces;
 
 namespace BadNetworkPlugin
@@ -28,6 +28,7 @@ namespace BadNetworkPlugin
     /// <summary>
     /// A plugin that simulates poor network conditions
     /// </summary>
+    [UsedImplicitly]
     public sealed class BadNetworkPlugin : TroublemakerPluginBase<Configuration>
     {
         #region Variables
@@ -35,6 +36,15 @@ namespace BadNetworkPlugin
         private IDistribution _latencyDistribution;
         private IDistribution _readDistribution;
         private IDistribution _writeDistribution;
+
+        #endregion
+
+        #region Constructors
+
+        /// <inheritdoc />
+        public BadNetworkPlugin(ILogger log) : base(log)
+        {
+        }
 
         #endregion
 
@@ -109,22 +119,22 @@ namespace BadNetworkPlugin
         /// <inheritdoc />
         protected override bool Init()
         {
-            _latencyDistribution = ParsedConfig.Latency?.CreateDistribution();
+            _latencyDistribution = ParsedConfig?.Latency?.CreateDistribution();
             if (_latencyDistribution != null) {
                 Log.Information("Latency parameters: {0} milliseconds with random source {1}",
-                    _latencyDistribution, ParsedConfig.Latency.RandomSourceType);
+                    _latencyDistribution, ParsedConfig!.Latency!.RandomSourceType);
             }
 
-            _writeDistribution = ParsedConfig.WriteBandwidth?.CreateDistribution();
+            _writeDistribution = ParsedConfig?.WriteBandwidth?.CreateDistribution();
             if (_writeDistribution != null) {
                 Log.Information("Write bandwidth parameters {0} kilobits/sec with random source {1}",
-                    _writeDistribution, ParsedConfig.WriteBandwidth.RandomSourceType);
+                    _writeDistribution, ParsedConfig!.WriteBandwidth!.RandomSourceType);
             }
 
-            _readDistribution = ParsedConfig.ReadBandwidth?.CreateDistribution();
+            _readDistribution = ParsedConfig?.ReadBandwidth?.CreateDistribution();
             if (_readDistribution != null) {
                 Log.Information("Read bandwidth parameters {0} kilobits/sec with random source {1}",
-                    _readDistribution, ParsedConfig.ReadBandwidth.RandomSourceType);
+                    _readDistribution, ParsedConfig!.ReadBandwidth!.RandomSourceType);
             }
 
             return true;

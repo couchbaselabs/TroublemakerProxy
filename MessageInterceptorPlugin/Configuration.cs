@@ -15,13 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
-
+using JetBrains.Annotations;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -30,6 +32,7 @@ using TroublemakerInterfaces;
 
 namespace MessageInterceptorPlugin
 {
+    [UsedImplicitly]
     public sealed class Configuration
     {
         #region Variables
@@ -40,7 +43,7 @@ namespace MessageInterceptorPlugin
 
         #region Properties
 
-        public IReadOnlyList<Rule> Rules => _rules;
+        public IEnumerable<Rule> Rules => _rules;
 
         #endregion
 
@@ -99,9 +102,9 @@ namespace MessageInterceptorPlugin
             string last;
             if (OutputTransforms.Count > 1) {
                 last = OutputTransforms.Skip(1)
-                    .Aggregate(OutputTransforms.First().ToString(), (x, y) => $"{x} and {y}", x => x);
+                    .Aggregate(OutputTransforms.First().ToString(), (x, y) => $"{x} and {y}", x => x)!;
             } else {
-                last = OutputTransforms.First().ToString();
+                last = OutputTransforms.First().ToString()!;
             }
 
             return $"While sending {RuleDirection}, when {Criteria}, {last}";
@@ -130,7 +133,7 @@ namespace MessageInterceptorPlugin
 
         public override bool CanConvert(Type objectType) => typeof(IReadOnlyList<TVal>).IsAssignableFrom(objectType);
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue,
+        public override object ReadJson(JsonReader reader, Type objectType, object? existingValue,
             JsonSerializer serializer)
         {
             if (reader.TokenType != JsonToken.StartArray) {
@@ -138,24 +141,27 @@ namespace MessageInterceptorPlugin
             }
 
             var converter = Activator.CreateInstance<TConverter>();
-            var retVal = new List<TVal>();
+            var retVal = new List<TVal?>();
             while (reader.TokenType != JsonToken.EndArray) {
                 reader.Read();
-                if (reader.TokenType == JsonToken.StartObject) {
-                    var next = (TVal) converter.ReadJson(reader, typeof(TVal), null, serializer);
-                    retVal.Add(next);
+                if (reader.TokenType != JsonToken.StartObject) {
+                    continue;
                 }
+
+                var next = (TVal?) converter.ReadJson(reader, typeof(TVal), null, serializer);
+                retVal.Add(next);
             }
 
             return retVal;
         }
 
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) =>
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) =>
             throw new NotSupportedException();
 
         #endregion
     }
 
+    [UsedImplicitly]
     public sealed class OutputTransformConverter : JsonConverter
     {
         #region Properties
@@ -168,29 +174,29 @@ namespace MessageInterceptorPlugin
 
         public override bool CanConvert(Type objectType) => typeof(IOutputTransform).IsAssignableFrom(objectType);
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue,
+        public override object ReadJson(JsonReader reader, Type objectType, object? existingValue,
             JsonSerializer serializer)
         {
             var data = JToken.ReadFrom(reader);
-            switch (Enum.Parse(typeof(MessagePortion), data["Portion"].Value<string>(), true)) {
+            switch (Enum.Parse(typeof(MessagePortion), data["Portion"]!.Value<string>()!, true)) {
                 case MessagePortion.MessageNo:
-                    return data.ToObject<MessageNumberOutputTransform>();
+                    return data.ToObject<MessageNumberOutputTransform>()!;
                 case MessagePortion.Flags:
-                    return data.ToObject<FlagsOutputTransform>();
+                    return data.ToObject<FlagsOutputTransform>()!;
                 case MessagePortion.Profile:
-                    return data.ToObject<ProfileOutputTransform>();
+                    return data.ToObject<ProfileOutputTransform>()!;
                 case MessagePortion.Properties:
-                    return data.ToObject<PropertiesOutputTransform>();
+                    return data.ToObject<PropertiesOutputTransform>()!;
                 case MessagePortion.Type:
-                    return data.ToObject<TypeOutputTransform>();
+                    return data.ToObject<TypeOutputTransform>()!;
                 case MessagePortion.Body:
-                    return data.ToObject<BodyOutputTransform>();
+                    return data.ToObject<BodyOutputTransform>()!;
             }
 
             throw new InvalidDataException($"Unable to find class for portion {data["Portion"]}");
         }
 
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) =>
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) =>
             throw new NotSupportedException();
 
         #endregion
@@ -215,21 +221,28 @@ namespace MessageInterceptorPlugin
         #endregion
     }
 
+    [UsedImplicitly]
     public sealed class InputCriteria
     {
         #region Properties
 
+        [UsedImplicitly]
         public Frequency ApplicationFrequency { get; set; } = Frequency.Always;
 
         [JsonConverter(typeof(StringEnumConverter))]
+        [UsedImplicitly]
         public FrameFlags? Flags { get; set; }
 
+        [UsedImplicitly]
         public ulong? Number { get; set; }
 
-        public string Profile { get; set; }
+        [UsedImplicitly]
+        public string? Profile { get; set; }
 
-        public IReadOnlyDictionary<string, string> Properties { get; set; }
+        [UsedImplicitly]
+        public IReadOnlyDictionary<string, string>? Properties { get; set; }
 
+        [UsedImplicitly]
         public MessageType? Type { get; set; }
 
         #endregion
@@ -254,15 +267,11 @@ namespace MessageInterceptorPlugin
                 return false;
             }
 
-            if (Properties != null) {
-                foreach (var entry in Properties) {
-                    if (!message.Properties.Contains($"{entry.Key}:{entry.Value}")) {
-                        return false;
-                    }
-                }
+            if (Properties == null) {
+                return true;
             }
 
-            return true;
+            return Properties.All(entry => message.Properties?.Contains($"{entry.Key}:{entry.Value}") == true);
         }
 
         #endregion
@@ -274,30 +283,30 @@ namespace MessageInterceptorPlugin
             var sb = new StringBuilder();
             var prefix = "";
             if (Type.HasValue) {
-                sb.AppendFormat("Type is {0}", Type.Value);
+                sb.Append($"Type is {Type.Value}");
                 prefix = " and ";
             }
 
             if (Number.HasValue) {
-                sb.AppendFormat("{0}Number is {1}", prefix, Number.Value);
+                sb.Append($"{prefix}Number is {Number.Value}");
                 prefix = " and ";
             }
 
             if (Profile != null) {
-                sb.AppendFormat("{0}Profile is {1}", prefix, Profile);
+                sb.Append($"{prefix}Profile is {Profile}");
                 prefix = " and ";
             }
 
             if (Flags.HasValue) {
-                sb.AppendFormat("{0}Flags is {1}", prefix, Flags.Value);
+                sb.Append($"{prefix}Flags is {Flags.Value}");
                 prefix = " and ";
             }
 
             if (Properties != null) {
-                sb.AppendFormat("{0}Properties contains {1}", prefix, JsonConvert.SerializeObject(Properties));
+                sb.Append($"{prefix}Properties contains {JsonConvert.SerializeObject(Properties)}");
             }
 
-            sb.AppendFormat(" (Frequency = {0})", ApplicationFrequency);
+            sb.Append($" (Frequency = {ApplicationFrequency})");
             return sb.ToString();
         }
 
@@ -317,6 +326,7 @@ namespace MessageInterceptorPlugin
         [JsonProperty(Required = Required.Always)]
         public ulong Number { get; }
 
+        [UsedImplicitly]
         public Operation Op { get; }
 
         #endregion
@@ -396,6 +406,7 @@ namespace MessageInterceptorPlugin
         [JsonProperty(Required = Required.Always)]
         public FrameFlags Flags { get; }
 
+        [UsedImplicitly]
         public Operation Op { get; }
 
         #endregion
@@ -478,15 +489,17 @@ namespace MessageInterceptorPlugin
         public void Transform(ref BLIPMessage message)
         {
             var dictionary = new Dictionary<string, string>();
-            string key = default;
-            foreach (var entry in message.Properties.Split(':')) {
-                if (key == null) {
-                    key = entry;
-                } else {
-                    dictionary[key] = entry;
-                    key = null;
+            string? key = default;
+            if (message.Properties != null) {
+                foreach (var entry in message.Properties!.Split(':')) {
+                    if (key == null) {
+                        key = entry;
+                    } else {
+                        dictionary[key] = entry;
+                        key = null;
+                    }
                 }
-            }
+            }   
 
             dictionary["Profile"] = Profile;
             message.Properties =
@@ -546,6 +559,7 @@ namespace MessageInterceptorPlugin
     {
         #region Properties
 
+        [UsedImplicitly]
         public Operation Op { get; }
 
         [JsonProperty(Required = Required.Always)]
@@ -570,7 +584,7 @@ namespace MessageInterceptorPlugin
         {
             var dictionary = new Dictionary<string, string>();
             if (message.Properties != null) {
-                string key = default;
+                string? key = default;
                 foreach (var entry in message.Properties.Split(':')) {
                     if (key == null) {
                         key = entry;

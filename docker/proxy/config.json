@@ -1,0 +1,5 @@
+{
+  "FromPort": 5984,
+  "ToPort": 4984,
+  "ToHost": "sync-gateway"
+}

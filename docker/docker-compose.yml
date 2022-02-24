@@ -1,0 +1,37 @@
+version: "3.9"
+services:
+  troublemakerproxy:
+    build:
+      context: ./proxy
+      args:
+        - troublemaker_version=${TROUBLEMAKER_VERSION:-1.3.0}
+    ports:
+      - "5984:5984"
+    volumes:
+      - "./proxy/config.json:/etc/troublemaker/config.json"
+    depends_on:
+      - "sync-gateway"
+  sync-gateway:
+    build:
+      context: ./sgw
+      args:
+        - SGW_VERSION=${SGW_VERSION:-2.8.0-enterprise}
+    ports:
+      - "4984:4984"
+      - "4985:4985"
+    volumes:
+      - "./sgw/sync-gateway-config.json:/etc/sync_gateway/sync_gateway.json"
+    depends_on: 
+      - "cb-server"
+    command: "-adminInterface :4985 /etc/sync_gateway/sync_gateway.json"
+  cb-server:
+    build:
+      context: ./server
+      args:
+        - COUCHBASE_VERSION=${COUCHBASE_VERSION:-7.0.2}
+    ports:
+      - "8091:8091"
+      - "8092:8092"
+      - "8093:8093"
+      - "8094:8094"
+      - "11210:11210"

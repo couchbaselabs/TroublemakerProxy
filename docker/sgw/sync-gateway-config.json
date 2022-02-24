@@ -1,0 +1,52 @@
+{
+    "interface": ":4984",
+    "log": [ "*" ],
+    "logging": {
+        "log_file_path": "/var/tmp/sglogs",
+        "console": {
+            "log_level": "warn",
+            "log_keys": [ "*" ]
+        },
+        "error": {
+            "enabled": true,
+            "rotation": {
+                "max_size": 20,
+                "max_age": 180
+            }
+        },
+        "warn": {
+            "enabled": true,
+            "rotation": {
+                "max_size": 20,
+                "max_age": 90
+            }
+        },
+        "info": {
+            "enabled": true
+        },
+        "debug": {
+            "enabled": true
+        }
+    },
+    "databases": {
+        "db": {
+            "import_docs": true,
+            "bucket": "db",
+            "server": "couchbases://cb-server",
+            "enable_shared_bucket_access": true,
+            "delta_sync": {
+                "enabled": true
+            },
+            "username": "admin",
+            "password": "password",
+            "users": {
+                "admin": {"password": "password","admin_channels": [ "*" ] },
+                "demo": {
+                    "password": "password",
+                    "admin_channels": [ "*" ]
+                }
+            },
+            "num_index_replicas": 0
+        }
+    }
+}

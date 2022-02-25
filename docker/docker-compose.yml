@@ -15,7 +15,7 @@ services:
     build:
       context: ./sgw
       args:
-        - SGW_VERSION=${SGW_VERSION:-2.8.0-enterprise}
+        - SGW_VERSION=${SGW_VERSION:-2.8.0}
     ports:
       - "4984:4984"
       - "4985:4985"

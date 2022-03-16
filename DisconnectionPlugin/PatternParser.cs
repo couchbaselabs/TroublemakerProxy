@@ -102,7 +102,11 @@ namespace DisconnectionPlugin
 
         [Lexeme(GenericToken.KeyWord, "msgno")]
         [Lexeme(GenericToken.KeyWord, "num")]
-        BlipMsgNo
+        BlipMsgNo,
+
+        [Lexeme(GenericToken.KeyWord, "time")]
+        [Lexeme(GenericToken.KeyWord, "times")]
+        Times
     }
 
     internal sealed class PatternParser
@@ -140,12 +144,21 @@ namespace DisconnectionPlugin
             return _result;
         }
 
+        [Production("blip_comparison: Integer rep_part")]
+        public Pattern Reps(Token<PatternToken> value, Pattern repPart)
+        {
+            repPart.Aggregate = value.IntValue;
+            _result.AddClause((_, _) => ++repPart.Counter <= (int)repPart.Aggregate!);
+            return _result;
+        }
+
         [Production("blip_msg_type: BlipTypeRequest")]
         [Production("blip_msg_type: BlipTypeResponse")]
         [Production("blip_msg_type: BlipTypeError")]
         [Production("time_part: Minutes")]
         [Production("time_part: Seconds")]
         [Production("time_part: Milliseconds")]
+        [Production("rep_part: Times")]
         [UsedImplicitly]
         public Pattern TokenPart(Token<PatternToken> type)
         {
@@ -219,11 +232,13 @@ namespace DisconnectionPlugin
 
         public object? Aggregate { get; set; }
 
+        public int Counter { get; set; }
+
         public void AddClause(Func<BLIPMessage,  TimeSpan,bool> clause) => _clauses.Add(clause);
 
         public bool Evaluate(BLIPMessage msg, TimeSpan elapsed)
         {
-            return _clauses.All(clause => clause(msg, elapsed));
+            return !_clauses.Any() || _clauses.All(clause => clause(msg, elapsed));
         }
     }
 }

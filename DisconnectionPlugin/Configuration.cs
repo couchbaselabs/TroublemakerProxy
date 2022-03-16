@@ -18,6 +18,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using JetBrains.Annotations;
@@ -29,7 +30,8 @@ namespace DisconnectionPlugin
         BLIPErrorMessage,
         WebsocketClose,
         PipeBreak,
-        Timeout
+        Timeout,
+        HTTPClose
     }
 
     [UsedImplicitly]

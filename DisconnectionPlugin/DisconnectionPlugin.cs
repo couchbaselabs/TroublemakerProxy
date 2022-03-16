@@ -65,6 +65,9 @@ namespace DisconnectionPlugin
                 case DisconnectType.WebsocketClose:
                     _nextAction = NetworkAction.CloseWebSocket;
                     break;
+                case DisconnectType.HTTPClose:
+                    _nextAction = NetworkAction.CloseHTTP;
+                    break;
                 case DisconnectType.PipeBreak:
                     _nextAction = NetworkAction.BreakPipe;
                     break;
@@ -91,7 +94,9 @@ namespace DisconnectionPlugin
         #region Overrides
 
         public override Task<NetworkAction> HandleNetworkStage(NetworkStage stage, int size) =>
-            Task.FromResult(_nextAction);
+            _pattern!.Evaluate(new BLIPMessage(), default(TimeSpan))
+                ? Task.FromResult(_nextAction)
+                : Task.FromResult(NetworkAction.Continue);
 
         public override Task<BLIPMessage?> HandleResponseStage(BLIPMessage message, bool fromClient)
         {
@@ -118,6 +123,10 @@ namespace DisconnectionPlugin
                 return false;
             }
 
+            if (ParsedConfig.DisconnectType == DisconnectType.HTTPClose) {
+                _nextAction = NetworkAction.CloseHTTP;
+            }
+
             foreach (var clause in ParsedConfig.PatternClauses) {
                 var parseResult = parser.Result.Parse(clause.ToLowerInvariant());
                 if (parseResult.IsError) {
@@ -129,7 +138,7 @@ namespace DisconnectionPlugin
                 _pattern = parseResult.Result;
             }
 
-            if (_pattern != null) {
+            if (_pattern != null || _nextAction == NetworkAction.CloseHTTP) {
                 return true;
             }
 

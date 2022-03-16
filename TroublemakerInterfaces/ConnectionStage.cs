@@ -47,7 +47,7 @@ namespace TroublemakerInterfaces
         /// Creates an entirely fabricated response without sending the
         /// original request through to the remote
         /// </summary>
-        Response = 1 << 3,
+        Response = 1 << 3
     }
 
     /// <summary>
@@ -69,7 +69,12 @@ namespace TroublemakerInterfaces
         /// <summary>
         /// Used to throttle write connections
         /// </summary>
-        Write
+        Write,
+
+        /// <summary>
+        /// Used to handle the initial HTTP handshake.
+        /// </summary>
+        Connect
     }
 
     /// <summary>
@@ -91,6 +96,11 @@ namespace TroublemakerInterfaces
         /// <summary>
         /// Forcibly close the TCP stream
         /// </summary>
-        BreakPipe
+        BreakPipe,
+
+        /// <summary>
+        /// Return a non-success HTTP message during the web socket handshake
+        /// </summary>
+        CloseHTTP
     }
 }

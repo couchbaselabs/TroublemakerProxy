@@ -198,6 +198,16 @@ namespace TroublemakerProxy
             return (connectionToSerialize.SerializeMessage(messageContainer, message), intercept);
         }
 
+        private void CloseAndRetry(HttpListenerContext context)
+        {
+            context.Response.Close();
+#pragma warning disable CS4014
+            ListenForConnection().ContinueWith(
+                t => _logger.Error(t.Exception?.InnerException, "Exception in ListenForConnection"),
+                TaskContinuationOptions.OnlyOnFaulted);
+#pragma warning restore CS4014
+        }
+
         private bool HandleNetworkAction(NetworkAction action)
         {
             switch (action) {
@@ -213,7 +223,7 @@ namespace TroublemakerProxy
                         _logger.Error("Unexpected _fromClient null in HandleNetworkAction");
                     } else {
 #pragma warning disable CS4014
-                        CloseSocket(_fromClient, WebSocketCloseStatus.ProtocolError, "The server is on fire!");
+                        CloseSocket(_fromClient, (WebSocketCloseStatus)_parsedConfig!.WebSocketDisconnectCode, _parsedConfig.WebSocketDisconnectMessage ?? "The server is on fire!");
 #pragma warning restore CS4014
                     }
                     break;
@@ -228,12 +238,22 @@ namespace TroublemakerProxy
             _logger.Verbose($"Got connection from {nextContext.Request.RemoteEndPoint.Address}");
             if (!nextContext.Request.IsWebSocketRequest) {
                 _logger.Warning("Ignoring non-websocket request to {0}", nextContext.Request.Url);
-                nextContext.Response.Close();
-#pragma warning disable CS4014
-                ListenForConnection().ContinueWith(
-                    t => _logger.Error(t.Exception?.InnerException, "Exception in ListenForConnection"),
-                    TaskContinuationOptions.OnlyOnFaulted);
-#pragma warning restore CS4014
+                CloseAndRetry(nextContext);
+                return;
+            }
+
+            foreach (var plugin in _plugins.Where(x => x.Style.HasFlag(TamperStyle.Network))) {
+                var nextAction = await plugin.HandleNetworkStage(NetworkStage.Connect, 0).ConfigureAwait(false);
+                if (nextAction != NetworkAction.CloseHTTP) {
+                    continue;
+                }
+
+                nextContext.Response.StatusCode = _parsedConfig!.HttpDisconnectCode;
+                if (_parsedConfig.HttpDisconnectMessage != null) {
+                    nextContext.Response.StatusDescription = _parsedConfig.HttpDisconnectMessage;
+                }
+
+                CloseAndRetry(nextContext);
                 return;
             }
 
@@ -302,12 +322,7 @@ namespace TroublemakerProxy
                     nextContext.Response.AddHeader("Www-Authenticate", "Basic realm=\"Couchbase Sync Gateway\"");
                 }
 
-                nextContext.Response.Close();
-#pragma warning disable CS4014
-                ListenForConnection().ContinueWith(
-                    t => _logger.Error(t.Exception?.InnerException, "Exception in ListenForConnection"),
-                    TaskContinuationOptions.OnlyOnFaulted);
-#pragma warning restore CS4014
+                CloseAndRetry(nextContext);
                 return;
             }
 

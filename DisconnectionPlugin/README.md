@@ -15,6 +15,7 @@ Before: "before"
 Minutes: "minutes"|"minute"
 Seconds: "seconds"|"second"
 Milliseconds: "milliseconds"|"millisecond"
+Times: "times"|"time"
 BlipTypeRequest: "request"|"msg"
 BlipTypeResponse: "response"|"rpy"
 BlipTypeError: "error"|"err"
@@ -51,6 +52,7 @@ An enum representing how the proxy should disconnect from the client.
 | Name                | Action |
 | ------------------- | ------ |
 | BLIPErrorMessage    | Sends back a BLIP message with an error code 500 |
-| WebSocketClose      | Closes the web socket connection with a 1002 code |
+| WebSocketClose      | Closes the web socket connection with a non-success code |
+| HTTPClose			  | Closes the connection before the websocket handshake with a non-success code |
 | PipeBreak (default) | Breaks the TCP socket connection without any message |
 | Timeout             | Doesn't send a response for 2 minutes, triggering a client timeout |

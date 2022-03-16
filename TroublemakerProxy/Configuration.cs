@@ -40,6 +40,12 @@ namespace TroublemakerProxy
         [Required] 
         public int FromPort { get; set; }
 
+        [UsedImplicitly]
+        public int HttpDisconnectCode { get; set; } = 404;
+
+        [UsedImplicitly]
+        public string? HttpDisconnectMessage { get; set; }
+
         /// <summary>
         /// The plugins to load for use in this session
         /// </summary>
@@ -58,6 +64,12 @@ namespace TroublemakerProxy
         [UsedImplicitly]
         [Required] 
         public int ToPort { get; set; }
+
+        [UsedImplicitly]
+        public int WebSocketDisconnectCode { get; set; } = 1002;
+
+        [UsedImplicitly]
+        public string? WebSocketDisconnectMessage { get; set; }
 
         #endregion
     }
